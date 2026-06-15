@@ -1,0 +1,309 @@
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { DisposalReceipt, DisposalReceiptStatus } from './disposal-receipt.entity';
+import { TransportOrder } from '../transport-order/transport-order.entity';
+import { Vehicle } from '../vehicle/vehicle.entity';
+import {
+  CreateDisposalReceiptDto,
+  UpdateDisposalReceiptDto,
+  QueryDisposalReceiptDto,
+  MatchReceiptDto,
+} from './disposal-receipt.dto';
+
+interface MatchDiff {
+  plateNumber?: { receipt: string; transport: string };
+  wasteType?: { receipt: string; transport: string };
+  weight?: { receipt: number; transport: number; diffPercent: number };
+  loadingDate?: { receipt: string; transport: string };
+}
+
+interface MatchResult {
+  matched: boolean;
+  matchScore: number;
+  diff: MatchDiff;
+  mismatchReason: string;
+}
+
+@Injectable()
+export class DisposalReceiptService {
+  constructor(
+    @InjectRepository(DisposalReceipt)
+    private readonly disposalReceiptRepository: Repository<DisposalReceipt>,
+    @InjectRepository(TransportOrder)
+    private readonly transportOrderRepository: Repository<TransportOrder>,
+    @InjectRepository(Vehicle)
+    private readonly vehicleRepository: Repository<Vehicle>,
+  ) {}
+
+  async create(createDisposalReceiptDto: CreateDisposalReceiptDto): Promise<DisposalReceipt> {
+    const existing = await this.disposalReceiptRepository.findOne({
+      where: { receiptNo: createDisposalReceiptDto.receiptNo },
+    });
+    if (existing) {
+      throw new ConflictException(`联单编号 ${createDisposalReceiptDto.receiptNo} 已存在`);
+    }
+
+    const receipt = this.disposalReceiptRepository.create({
+      ...createDisposalReceiptDto,
+      status: DisposalReceiptStatus.PENDING,
+    });
+
+    return this.disposalReceiptRepository.save(receipt);
+  }
+
+  async findAll(
+    queryDisposalReceiptDto: QueryDisposalReceiptDto,
+  ): Promise<{ data: DisposalReceipt[]; total: number; page: number; pageSize: number }> {
+    const {
+      receiptNo,
+      plateNumber,
+      status,
+      wasteType,
+      loadingDateStart,
+      loadingDateEnd,
+      page = 1,
+      pageSize = 10,
+    } = queryDisposalReceiptDto;
+
+    const queryBuilder = this.disposalReceiptRepository.createQueryBuilder('receipt');
+
+    if (receiptNo) {
+      queryBuilder.andWhere('receipt.receiptNo LIKE :receiptNo', {
+        receiptNo: `%${receiptNo}%`,
+      });
+    }
+
+    if (plateNumber) {
+      queryBuilder.andWhere('receipt.plateNumber LIKE :plateNumber', {
+        plateNumber: `%${plateNumber}%`,
+      });
+    }
+
+    if (status) {
+      queryBuilder.andWhere('receipt.status = :status', { status });
+    }
+
+    if (wasteType) {
+      queryBuilder.andWhere('receipt.wasteType LIKE :wasteType', {
+        wasteType: `%${wasteType}%`,
+      });
+    }
+
+    if (loadingDateStart) {
+      queryBuilder.andWhere('receipt.loadingDate >= :loadingDateStart', { loadingDateStart });
+    }
+
+    if (loadingDateEnd) {
+      queryBuilder.andWhere('receipt.loadingDate <= :loadingDateEnd', { loadingDateEnd });
+    }
+
+    queryBuilder.orderBy('receipt.createdAt', 'DESC');
+    queryBuilder.skip((page - 1) * pageSize);
+    queryBuilder.take(pageSize);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async findOne(id: string): Promise<DisposalReceipt> {
+    const receipt = await this.disposalReceiptRepository.findOne({ where: { id } });
+    if (!receipt) {
+      throw new NotFoundException(`处置联单ID ${id} 不存在`);
+    }
+    return receipt;
+  }
+
+  async findByReceiptNo(receiptNo: string): Promise<DisposalReceipt> {
+    const receipt = await this.disposalReceiptRepository.findOne({ where: { receiptNo } });
+    if (!receipt) {
+      throw new NotFoundException(`联单编号 ${receiptNo} 不存在`);
+    }
+    return receipt;
+  }
+
+  async getUnmatchedReceipts(): Promise<DisposalReceipt[]> {
+    return this.disposalReceiptRepository.find({
+      where: { status: DisposalReceiptStatus.PENDING },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getMatchStatistics(): Promise<{
+    total: number;
+    pending: number;
+    matched: number;
+    mismatched: number;
+    expired: number;
+    matchRate: number;
+  }> {
+    const total = await this.disposalReceiptRepository.count();
+    const pending = await this.disposalReceiptRepository.count({
+      where: { status: DisposalReceiptStatus.PENDING },
+    });
+    const matched = await this.disposalReceiptRepository.count({
+      where: { status: DisposalReceiptStatus.MATCHED },
+    });
+    const mismatched = await this.disposalReceiptRepository.count({
+      where: { status: DisposalReceiptStatus.MISMATCHED },
+    });
+    const expired = await this.disposalReceiptRepository.count({
+      where: { status: DisposalReceiptStatus.EXPIRED },
+    });
+
+    const processed = matched + mismatched;
+    const matchRate = processed > 0 ? Number(((matched / processed) * 100).toFixed(2)) : 0;
+
+    return {
+      total,
+      pending,
+      matched,
+      mismatched,
+      expired,
+      matchRate,
+    };
+  }
+
+  private isWeightMatch(receiptWeight: number, transportWeight: number): boolean {
+    if (!receiptWeight || !transportWeight) return false;
+    const diff = Math.abs(receiptWeight - transportWeight);
+    const diffPercent = (diff / transportWeight) * 100;
+    return diffPercent <= 5;
+  }
+
+  private getWeightDiffPercent(receiptWeight: number, transportWeight: number): number {
+    if (!receiptWeight || !transportWeight) return 100;
+    const diff = Math.abs(receiptWeight - transportWeight);
+    return Number(((diff / transportWeight) * 100).toFixed(2));
+  }
+
+  private isSameDay(date1: Date, date2: Date): boolean {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return (
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate()
+    );
+  }
+
+  private async performMatch(receipt: DisposalReceipt, transportOrder: TransportOrder): Promise<MatchResult> {
+    const diff: MatchDiff = {};
+    const mismatchReasons: string[] = [];
+    let matchScore = 0;
+    const totalChecks = 4;
+
+    const vehicle = await this.vehicleRepository.findOne({
+      where: { id: transportOrder.vehicleId },
+    });
+    const transportPlateNumber = vehicle?.plateNumber;
+
+    if (receipt.plateNumber === transportPlateNumber) {
+      matchScore++;
+    } else {
+      diff.plateNumber = {
+        receipt: receipt.plateNumber,
+        transport: transportPlateNumber || '未知',
+      };
+      mismatchReasons.push(`车牌不匹配：联单${receipt.plateNumber} vs 运输单${transportPlateNumber || '未知'}`);
+    }
+
+    if (receipt.wasteType === transportOrder.wasteType) {
+      matchScore++;
+    } else {
+      diff.wasteType = {
+        receipt: receipt.wasteType,
+        transport: transportOrder.wasteType,
+      };
+      mismatchReasons.push(`垃圾类型不匹配：联单${receipt.wasteType} vs 运输单${transportOrder.wasteType}`);
+    }
+
+    const transportWeight = transportOrder.actualWeight || transportOrder.plannedWeight;
+    const receiptWeight = receipt.actualWeight || receipt.receiptWeight;
+    if (this.isWeightMatch(receiptWeight, transportWeight)) {
+      matchScore++;
+    } else {
+      diff.weight = {
+        receipt: receiptWeight,
+        transport: transportWeight,
+        diffPercent: this.getWeightDiffPercent(receiptWeight, transportWeight),
+      };
+      mismatchReasons.push(`重量误差超过5%：联单${receiptWeight}吨 vs 运输单${transportWeight}吨，误差${this.getWeightDiffPercent(receiptWeight, transportWeight)}%`);
+    }
+
+    const transportLoadingDate = transportOrder.loadingCompleteTime || transportOrder.actualDepartureTime;
+    if (this.isSameDay(receipt.loadingDate, transportLoadingDate)) {
+      matchScore++;
+    } else {
+      diff.loadingDate = {
+        receipt: new Date(receipt.loadingDate).toISOString().split('T')[0],
+        transport: transportLoadingDate ? new Date(transportLoadingDate).toISOString().split('T')[0] : '未知',
+      };
+      mismatchReasons.push(`装载日期不匹配：联单${new Date(receipt.loadingDate).toISOString().split('T')[0]} vs 运输单${transportLoadingDate ? new Date(transportLoadingDate).toISOString().split('T')[0] : '未知'}`);
+    }
+
+    const matched = matchScore === totalChecks;
+
+    return {
+      matched,
+      matchScore,
+      diff,
+      mismatchReason: mismatchReasons.join('; '),
+    };
+  }
+
+  async matchReceipt(id: string, matchReceiptDto: MatchReceiptDto): Promise<DisposalReceipt> {
+    const receipt = await this.findOne(id);
+
+    if (receipt.status !== DisposalReceiptStatus.PENDING) {
+      throw new BadRequestException('该联单已完成匹配，无需重复操作');
+    }
+
+    const transportOrder = await this.transportOrderRepository.findOne({
+      where: { id: matchReceiptDto.transportOrderId },
+    });
+    if (!transportOrder) {
+      throw new NotFoundException(`运输单ID ${matchReceiptDto.transportOrderId} 不存在`);
+    }
+
+    const matchResult = await this.performMatch(receipt, transportOrder);
+
+    receipt.transportOrderId = transportOrder.id;
+    receipt.status = matchResult.matched ? DisposalReceiptStatus.MATCHED : DisposalReceiptStatus.MISMATCHED;
+    receipt.matchedBy = matchReceiptDto.matchedBy;
+    receipt.matchedAt = new Date();
+    receipt.matchDiff = matchResult.diff;
+    receipt.mismatchReason = matchResult.matched ? null : matchResult.mismatchReason;
+
+    return this.disposalReceiptRepository.save(receipt);
+  }
+
+  async update(id: string, updateDisposalReceiptDto: UpdateDisposalReceiptDto): Promise<DisposalReceipt> {
+    const receipt = await this.findOne(id);
+
+    if (updateDisposalReceiptDto.receiptNo && updateDisposalReceiptDto.receiptNo !== receipt.receiptNo) {
+      const existing = await this.disposalReceiptRepository.findOne({
+        where: { receiptNo: updateDisposalReceiptDto.receiptNo },
+      });
+      if (existing) {
+        throw new ConflictException(`联单编号 ${updateDisposalReceiptDto.receiptNo} 已存在`);
+      }
+    }
+
+    Object.assign(receipt, updateDisposalReceiptDto);
+
+    return this.disposalReceiptRepository.save(receipt);
+  }
+
+  async remove(id: string): Promise<void> {
+    const receipt = await this.findOne(id);
+    await this.disposalReceiptRepository.remove(receipt);
+  }
+}
