@@ -1,9 +1,9 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { Producer, Admin, Consumer } from 'kafkajs';
-import { KAFKA_PRODUCER, KAFKA_ADMIN, KAFKA_CONSUMER, KAFKA_TOPICS } from './kafka.module';
+import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
+import { Producer, Consumer, Admin } from 'kafkajs';
+import { KAFKA_PRODUCER, KAFKA_ADMIN, KAFKA_CONSUMER, KAFKA_TOPICS } from './kafka.constants';
 
 @Injectable()
-export class KafkaService {
+export class KafkaService implements OnModuleInit {
   private readonly logger = new Logger(KafkaService.name);
 
   constructor(
@@ -11,6 +11,20 @@ export class KafkaService {
     @Inject(KAFKA_CONSUMER) private readonly consumer: Consumer,
     @Inject(KAFKA_ADMIN) private readonly admin: Admin,
   ) {}
+
+  async onModuleInit() {
+    try {
+      const topics = Object.values(KAFKA_TOPICS).map(topic => ({
+        topic,
+        numPartitions: 1,
+        replicationFactor: 1,
+      }));
+      await this.admin.createTopics({ topics });
+      this.logger.log('Kafka topics initialized successfully');
+    } catch (error) {
+      this.logger.warn(`Kafka topics may already exist: ${error.message}`);
+    }
+  }
 
   async sendMessage(topic: string, message: any, key?: string): Promise<void> {
     try {

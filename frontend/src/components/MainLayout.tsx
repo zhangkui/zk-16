@@ -11,7 +11,7 @@ import {
   EnvironmentOutlined,
   WarningOutlined,
   CameraOutlined,
-  ReceiptOutlined,
+  FormOutlined,
   AuditOutlined,
   UserOutlined,
   LogoutOutlined,
@@ -31,7 +31,7 @@ const menuItems = [
   { key: '/track', icon: <EnvironmentOutlined />, label: '轨迹监控' },
   { key: '/alerts', icon: <WarningOutlined />, label: '告警中心' },
   { key: '/evidences', icon: <CameraOutlined />, label: '证据管理' },
-  { key: '/disposal-receipts', icon: <ReceiptOutlined />, label: '处置联单' },
+  { key: '/disposal-receipts', icon: <FormOutlined />, label: '处置联单' },
   { key: '/audit', icon: <AuditOutlined />, label: '审计日志' },
 ];
 

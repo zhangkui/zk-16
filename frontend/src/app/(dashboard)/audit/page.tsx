@@ -31,7 +31,7 @@ const { RangePicker } = DatePicker;
 
 interface AuditLog {
   id: string;
-  operationType: 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'login' | 'logout' | 'query' | 'export' | 'other';
+  operationType: 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'login' | 'logout' | 'query' | 'export' | 'process' | 'verify' | 'match' | 'other';
   module: 'auth' | 'vehicle' | 'fence' | 'transport_order' | 'alert' | 'evidence' | 'disposal_receipt' | 'system' | 'other';
   operator: string;
   operatorId?: string;

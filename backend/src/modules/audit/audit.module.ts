@@ -16,6 +16,6 @@ import { AuditInterceptor } from './audit.interceptor';
       useClass: AuditInterceptor,
     },
   ],
-  exports: [AuditService, AuditInterceptor],
+  exports: [AuditService],
 })
 export class AuditModule {}

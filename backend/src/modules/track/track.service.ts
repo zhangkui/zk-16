@@ -8,7 +8,8 @@ import { TransportOrder, TransportOrderStatus } from '../transport-order/transpo
 import { CreateTrackPointDto, QueryTrackDto, QueryLatestPositionsDto } from './track.dto';
 import { KafkaService } from '../../kafka/kafka.service';
 import { AlertType, AlertLevel } from '../alert/alert.entity';
-import * as turf from '@turf/turf';
+import { point, lineString } from '@turf/helpers';
+import pointToLineDistance from '@turf/point-to-line-distance';
 
 interface LatestPosition {
   plateNumber: string;
@@ -92,18 +93,18 @@ export class TrackService {
     }
 
     try {
-      const point = turf.point([lng, lat]);
+      const pt = point([lng, lat]);
 
       let line: any;
       if (typeof plannedRoute === 'string') {
-        line = turf.lineString(JSON.parse(plannedRoute));
+        line = lineString(JSON.parse(plannedRoute));
       } else if (plannedRoute.type === 'LineString') {
-        line = turf.lineString(plannedRoute.coordinates);
+        line = lineString(plannedRoute.coordinates);
       } else {
-        line = turf.lineString(plannedRoute);
+        line = lineString(plannedRoute);
       }
 
-      const distance = turf.pointToLineDistance(point, line, { units: 'meters' });
+      const distance = pointToLineDistance(pt, line, { units: 'meters' });
 
       return {
         isDeviated: distance > DEVIATION_THRESHOLD,
@@ -142,7 +143,7 @@ export class TrackService {
       deviationDistance,
     } as any);
 
-    const savedPoint = await this.trackPointRepository.save(trackPoint);
+    const savedPoint = await this.trackPointRepository.save(trackPoint) as unknown as TrackPoint;
 
     const latestPosition: LatestPosition = {
       plateNumber,

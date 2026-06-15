@@ -35,7 +35,7 @@ interface Fence {
   name: string;
   type: 'polygon' | 'circle';
   fenceType: 'loading' | 'unloading' | 'forbidden' | 'storage';
-  coordinates: any;
+  coordinates?: any;
   radius?: number;
   center?: [number, number];
   enabled: boolean;

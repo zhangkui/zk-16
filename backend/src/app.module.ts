@@ -3,8 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-redis-store';
-import type { RedisClientOptions } from 'redis';
+import { redisStore } from 'cache-manager-redis-yet';
 import { VehicleModule } from './modules/vehicle/vehicle.module';
 import { FenceModule } from './modules/fence/fence.module';
 import { TransportOrderModule } from './modules/transport-order/transport-order.module';
@@ -37,17 +36,18 @@ import { AuthModule } from './modules/auth/auth.module';
         logging: false,
       }),
     }),
-    CacheModule.registerAsync<RedisClientOptions>({
+    CacheModule.registerAsync({
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        store: redisStore,
-        socket: {
-          host: configService.get('REDIS_HOST', 'localhost'),
-          port: +configService.get('REDIS_PORT', 6379),
-        },
-        ttl: 600,
+      useFactory: async (configService: ConfigService) => ({
+        store: await redisStore({
+          socket: {
+            host: configService.get('REDIS_HOST', 'localhost'),
+            port: +configService.get('REDIS_PORT', 6379),
+          },
+          ttl: 600,
+        }),
       }),
     }),
     EventEmitterModule.forRoot({

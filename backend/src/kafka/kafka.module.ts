@@ -1,21 +1,8 @@
-import { Module, Global, OnModuleInit, Logger, Inject } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Kafka, Producer, Consumer, Admin, logLevel } from 'kafkajs';
+import { Kafka, logLevel } from 'kafkajs';
 import { KafkaService } from './kafka.service';
-
-export const KAFKA_PRODUCER = 'KAFKA_PRODUCER';
-export const KAFKA_CONSUMER = 'KAFKA_CONSUMER';
-export const KAFKA_ADMIN = 'KAFKA_ADMIN';
-
-export const KAFKA_TOPICS = {
-  TRACK_POINT: 'track.point',
-  ALERT: 'waste.alert',
-  VEHICLE_VERIFY: 'vehicle.verify',
-  FENCE_EVENT: 'fence.event',
-  DISPOSAL_MATCH: 'disposal.match',
-  EVIDENCE_COLLECT: 'evidence.collect',
-  AUDIT_LOG: 'audit.log',
-};
+import { KAFKA_PRODUCER, KAFKA_CONSUMER, KAFKA_ADMIN } from './kafka.constants';
 
 @Global()
 @Module({
@@ -62,26 +49,6 @@ export const KAFKA_TOPICS = {
     },
     KafkaService,
   ],
-  exports: [Kafka, KAFKA_PRODUCER, KAFKA_CONSUMER, KAFKA_ADMIN, KafkaService],
+  exports: [KAFKA_PRODUCER, KAFKA_CONSUMER, KAFKA_ADMIN, KafkaService],
 })
-export class KafkaModule implements OnModuleInit {
-  private readonly logger = new Logger(KafkaModule.name);
-
-  constructor(
-    @Inject(KAFKA_ADMIN) private readonly admin: Admin,
-  ) {}
-
-  async onModuleInit() {
-    try {
-      const topics = Object.values(KAFKA_TOPICS).map(topic => ({
-        topic,
-        numPartitions: 1,
-        replicationFactor: 1,
-      }));
-      await this.admin.createTopics({ topics });
-      this.logger.log('Kafka topics initialized successfully');
-    } catch (error) {
-      this.logger.warn(`Kafka topics may already exist: ${error.message}`);
-    }
-  }
-}
+export class KafkaModule {}

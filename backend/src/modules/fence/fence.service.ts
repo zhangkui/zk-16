@@ -49,7 +49,7 @@ export class FenceService {
       geom: Raw(() => geomExpression),
     } as any);
 
-    return this.fenceRepository.save(fence);
+    return this.fenceRepository.save(fence) as unknown as Fence;
   }
 
   async findAll(queryFenceDto: QueryFenceDto): Promise<{ data: Fence[]; total: number; page: number; pageSize: number }> {
