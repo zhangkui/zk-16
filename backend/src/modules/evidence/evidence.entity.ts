@@ -28,19 +28,20 @@ export class Evidence {
   id: string;
 
   @Index()
-  @Column({ type: 'uuid', comment: '关联告警ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '关联告警ID' })
   alertId: string;
 
   @Index()
-  @Column({ type: 'uuid', comment: '关联运输单ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '关联运输单ID' })
   transportOrderId: string;
 
-  @Column({ type: 'varchar', length: 50, comment: '车牌号' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '车牌号' })
   plateNumber: string;
 
   @Column({
     type: 'enum',
     enum: EvidenceType,
+    nullable: true,
     comment: '证据类型',
   })
   type: EvidenceType;
@@ -53,13 +54,13 @@ export class Evidence {
   })
   status: EvidenceStatus;
 
-  @Column({ type: 'varchar', length: 200, comment: '证据文件名称' })
+  @Column({ type: 'varchar', length: 200, nullable: true, comment: '证据文件名称' })
   fileName: string;
 
-  @Column({ type: 'varchar', length: 500, comment: '证据文件存储路径' })
+  @Column({ type: 'varchar', length: 500, nullable: true, comment: '证据文件存储路径' })
   filePath: string;
 
-  @Column({ type: 'bigint', default: 0, comment: '文件大小(字节)' })
+  @Column({ type: 'bigint', nullable: true, default: null, comment: '文件大小(字节)' })
   fileSize: number;
 
   @Column({ type: 'varchar', length: 100, nullable: true, comment: '文件哈希(SHA256)' })
@@ -77,10 +78,10 @@ export class Evidence {
   @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true, comment: '证据采集位置纬度' })
   latitude: number;
 
-  @Column({ type: 'timestamp', comment: '证据采集时间' })
+  @Column({ type: 'timestamp', nullable: true, comment: '证据采集时间' })
   collectedAt: Date;
 
-  @Column({ type: 'varchar', length: 50, comment: '采集方式' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '采集方式' })
   collectedBy: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true, comment: '固化操作员' })

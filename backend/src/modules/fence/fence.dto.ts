@@ -1,7 +1,10 @@
-import { IsString, IsEnum, IsOptional, IsNumber, IsArray, IsNotEmpty, ArrayMinSize, ValidateIf, Matches, IsPhoneNumber, IsBoolean } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsNumber, IsArray, IsNotEmpty, ArrayMinSize, ValidateIf, Matches, IsPhoneNumber, IsBoolean, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { FenceType, FenceStatus } from './fence.entity';
+
+const FENCE_TYPE_VALUES = ['loading', 'unloading', 'restricted', 'permit', 'forbidden', 'storage'];
+const SHAPE_TYPE_VALUES = ['polygon', 'circle'];
 
 export class CoordinateDto {
   @ApiProperty({ description: '经度', example: 116.397 })
@@ -19,15 +22,20 @@ export class CreateFenceDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: '围栏类型', enum: FenceType, example: FenceType.LOADING })
+  @ApiProperty({ description: '围栏形状类型', enum: SHAPE_TYPE_VALUES, example: 'polygon' })
   @IsOptional()
-  @IsEnum(FenceType)
-  type?: FenceType;
+  @IsIn(SHAPE_TYPE_VALUES)
+  type?: string;
 
-  @ApiProperty({ description: '围栏类型 - 别名', enum: FenceType, example: FenceType.LOADING })
+  @ApiProperty({ description: '围栏类型', enum: FENCE_TYPE_VALUES, example: 'loading' })
   @IsOptional()
-  @IsEnum(FenceType)
-  fenceType?: FenceType;
+  @IsIn(FENCE_TYPE_VALUES)
+  fenceType?: string;
+
+  @ApiPropertyOptional({ description: '围栏形状类型 - 别名', enum: SHAPE_TYPE_VALUES })
+  @IsOptional()
+  @IsIn(SHAPE_TYPE_VALUES)
+  shapeType?: string;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus, default: FenceStatus.ACTIVE })
   @IsOptional()
@@ -118,15 +126,20 @@ export class UpdateFenceDto {
   @IsString()
   name?: string;
 
-  @ApiPropertyOptional({ description: '围栏类型', enum: FenceType })
+  @ApiPropertyOptional({ description: '围栏形状类型', enum: SHAPE_TYPE_VALUES })
   @IsOptional()
-  @IsEnum(FenceType)
-  type?: FenceType;
+  @IsIn(SHAPE_TYPE_VALUES)
+  type?: string;
 
-  @ApiPropertyOptional({ description: '围栏类型 - 别名', enum: FenceType })
+  @ApiPropertyOptional({ description: '围栏类型', enum: FENCE_TYPE_VALUES })
   @IsOptional()
-  @IsEnum(FenceType)
-  fenceType?: FenceType;
+  @IsIn(FENCE_TYPE_VALUES)
+  fenceType?: string;
+
+  @ApiPropertyOptional({ description: '围栏形状类型 - 别名', enum: SHAPE_TYPE_VALUES })
+  @IsOptional()
+  @IsIn(SHAPE_TYPE_VALUES)
+  shapeType?: string;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus })
   @IsOptional()
@@ -212,15 +225,20 @@ export class UpdateFenceDto {
 }
 
 export class QueryFenceDto {
-  @ApiPropertyOptional({ description: '围栏类型', enum: FenceType })
+  @ApiPropertyOptional({ description: '围栏形状类型', enum: SHAPE_TYPE_VALUES })
   @IsOptional()
-  @IsEnum(FenceType)
-  type?: FenceType;
+  @IsIn(SHAPE_TYPE_VALUES)
+  type?: string;
 
-  @ApiPropertyOptional({ description: '围栏类型 - 别名', enum: FenceType })
+  @ApiPropertyOptional({ description: '围栏类型', enum: FENCE_TYPE_VALUES })
   @IsOptional()
-  @IsEnum(FenceType)
-  fenceType?: FenceType;
+  @IsIn(FENCE_TYPE_VALUES)
+  fenceType?: string;
+
+  @ApiPropertyOptional({ description: '围栏形状类型 - 别名', enum: SHAPE_TYPE_VALUES })
+  @IsOptional()
+  @IsIn(SHAPE_TYPE_VALUES)
+  shapeType?: string;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus })
   @IsOptional()

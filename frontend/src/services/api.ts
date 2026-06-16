@@ -24,7 +24,12 @@ api.interceptors.request.use(
 );
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.data && response.data.data && response.data.total !== undefined) {
+      response.data.list = response.data.data;
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       destroyCookie(null, 'token');
@@ -85,13 +90,13 @@ export const transportOrderApi = {
 };
 
 export const trackApi = {
-  create: (data: any) => api.post('/track-points', data),
-  batchCreate: (data: any[]) => api.post('/track-points/batch', data),
+  create: (data: any) => api.post('/track/point', data),
+  batchCreate: (data: any[]) => api.post('/track/points', data),
   getByOrder: (transportOrderId: string, params?: any) =>
-    api.get(`/track-points/order/${transportOrderId}`, { params }),
-  list: (params?: any) => api.get('/track-points', { params }),
-  getLatestPosition: (plateNumber: string) => api.get('/track-points/latest', { params: { plateNumber } }),
-  getLatestPositions: (params?: any) => api.post('/track-points/latest/batch', params),
+    api.get(`/track/order/${transportOrderId}`, { params }),
+  list: (params?: any) => api.get('/track', { params }),
+  getLatestPosition: (plateNumber: string) => api.get(`/track/latest/${plateNumber}`),
+  getLatestPositions: (params?: any) => api.post('/track/latest/batch', params),
 };
 
 export const alertApi = {
@@ -127,6 +132,6 @@ export const disposalReceiptApi = {
 };
 
 export const auditApi = {
-  list: (params?: any) => api.get('/audit-logs', { params }),
-  export: (params?: any) => api.get('/audit-logs/export', { params, responseType: 'blob' }),
+  list: (params?: any) => api.get('/audit/logs', { params }),
+  export: (params?: any) => api.get('/audit/logs/export', { params, responseType: 'blob' }),
 };

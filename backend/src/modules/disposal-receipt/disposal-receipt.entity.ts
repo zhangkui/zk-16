@@ -23,7 +23,7 @@ export class DisposalReceipt {
   id: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 50, comment: '处置联单编号' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '处置联单编号' })
   receiptNo: string;
 
   @Index()
@@ -34,37 +34,37 @@ export class DisposalReceipt {
   @JoinColumn({ name: 'transportOrderId' })
   transportOrder: TransportOrder;
 
-  @Column({ type: 'varchar', length: 50, comment: '车牌号' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '车牌号' })
   plateNumber: string;
 
-  @Column({ type: 'varchar', length: 100, comment: '运输企业名称' })
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '运输企业名称' })
   companyName: string;
 
-  @Column({ type: 'varchar', length: 100, comment: '产生单位' })
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '产生单位' })
   generatorUnit: string;
 
-  @Column({ type: 'varchar', length: 100, comment: '运输单位' })
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '运输单位' })
   transportUnit: string;
 
-  @Column({ type: 'varchar', length: 100, comment: '处置单位' })
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '处置单位' })
   disposalUnit: string;
 
-  @Column({ type: 'varchar', length: 100, comment: '垃圾种类' })
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '垃圾种类' })
   wasteType: string;
 
-  @Column({ type: 'decimal', precision: 8, scale: 2, comment: '联单载明重量(吨)' })
+  @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true, comment: '联单载明重量(吨)' })
   receiptWeight: number;
 
   @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true, comment: '实际称重重量(吨)' })
   actualWeight: number;
 
-  @Column({ type: 'date', comment: '装载日期' })
+  @Column({ type: 'date', nullable: true, comment: '装载日期' })
   loadingDate: Date;
 
-  @Column({ type: 'varchar', length: 200, comment: '装货地点' })
+  @Column({ type: 'varchar', length: 200, nullable: true, comment: '装货地点' })
   loadingAddress: string;
 
-  @Column({ type: 'varchar', length: 200, comment: '卸货/处置地点' })
+  @Column({ type: 'varchar', length: 200, nullable: true, comment: '卸货/处置地点' })
   disposalAddress: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true, comment: '装货经办人' })

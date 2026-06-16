@@ -1,32 +1,48 @@
-import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
-import { Producer, Consumer, Admin } from 'kafkajs';
-import { KAFKA_PRODUCER, KAFKA_ADMIN, KAFKA_CONSUMER, KAFKA_TOPICS } from './kafka.constants';
+import { Injectable, Inject, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { Kafka, Producer, Consumer, Admin } from 'kafkajs';
+import { KAFKA_TOPICS } from './kafka.constants';
 
 @Injectable()
 export class KafkaService implements OnModuleInit {
   private readonly logger = new Logger(KafkaService.name);
+  private producer: Producer | null = null;
+  private consumer: Consumer | null = null;
+  private admin: Admin | null = null;
+  private connected = false;
 
   constructor(
-    @Inject(KAFKA_PRODUCER) private readonly producer: Producer,
-    @Inject(KAFKA_CONSUMER) private readonly consumer: Consumer,
-    @Inject(KAFKA_ADMIN) private readonly admin: Admin,
+    @Inject(Kafka) private readonly kafka: Kafka,
   ) {}
 
   async onModuleInit() {
     try {
+      this.producer = this.kafka.producer();
+      this.consumer = this.kafka.consumer({ groupId: 'waste-transport-group' });
+      this.admin = this.kafka.admin();
+
+      await this.producer.connect();
+      await this.consumer.connect();
+      await this.admin.connect();
+      this.connected = true;
+
       const topics = Object.values(KAFKA_TOPICS).map(topic => ({
         topic,
         numPartitions: 1,
         replicationFactor: 1,
       }));
       await this.admin.createTopics({ topics });
-      this.logger.log('Kafka topics initialized successfully');
+      this.logger.log('Kafka connected and topics initialized successfully');
     } catch (error) {
-      this.logger.warn(`Kafka topics may already exist: ${error.message}`);
+      this.connected = false;
+      this.logger.warn(`Kafka connection failed, running in degraded mode: ${error.message}`);
     }
   }
 
   async sendMessage(topic: string, message: any, key?: string): Promise<void> {
+    if (!this.connected || !this.producer) {
+      this.logger.warn(`Kafka not connected, skipping message to topic ${topic}`);
+      return;
+    }
     try {
       await this.producer.send({
         topic,
@@ -40,7 +56,6 @@ export class KafkaService implements OnModuleInit {
       this.logger.debug(`Message sent to topic ${topic}`);
     } catch (error) {
       this.logger.error(`Failed to send message to topic ${topic}:`, error);
-      throw error;
     }
   }
 
@@ -65,6 +80,10 @@ export class KafkaService implements OnModuleInit {
   }
 
   async subscribe(topic: string, handler: (message: any) => Promise<void>): Promise<void> {
+    if (!this.connected || !this.consumer) {
+      this.logger.warn(`Kafka not connected, skipping subscription to topic ${topic}`);
+      return;
+    }
     await this.consumer.subscribe({ topic, fromBeginning: false });
     await this.consumer.run({
       eachMessage: async ({ message }) => {
@@ -79,6 +98,9 @@ export class KafkaService implements OnModuleInit {
   }
 
   async listTopics(): Promise<string[]> {
+    if (!this.connected || !this.admin) {
+      return [];
+    }
     return this.admin.listTopics();
   }
 }

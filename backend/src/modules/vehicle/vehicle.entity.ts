@@ -31,42 +31,46 @@ export class Vehicle {
   @Column({ type: 'varchar', length: 50, comment: '车牌号' })
   plateNumber: string;
 
-  @Column({ type: 'varchar', length: 50, comment: '车辆识别码' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '车辆识别码' })
   vin: string;
 
   @Column({
     type: 'enum',
     enum: VehicleType,
+    nullable: true,
     comment: '车辆类型',
   })
   vehicleType: VehicleType;
 
-  @Column({ type: 'varchar', length: 20, comment: '车辆颜色' })
+  @Column({ type: 'varchar', length: 20, nullable: true, comment: '车辆颜色' })
   color: string;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, comment: '核定载重量(吨)' })
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, comment: '核定载重量(吨)' })
   loadCapacity: number;
 
-  @Column({ type: 'varchar', length: 100, comment: '所属运输企业' })
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '所属运输企业' })
   companyName: string;
 
-  @Column({ type: 'varchar', length: 50, comment: '驾驶员姓名' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '驾驶员姓名' })
   driverName: string;
 
-  @Column({ type: 'varchar', length: 20, comment: '驾驶员联系电话' })
+  @Column({ type: 'varchar', length: 20, nullable: true, comment: '驾驶员联系电话' })
   driverPhone: string;
 
-  @Column({ type: 'varchar', length: 50, comment: '驾驶员从业资格证号' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '驾驶员从业资格证号' })
   driverLicenseNo: string;
 
-  @Column({ type: 'varchar', length: 50, comment: '道路运输证号' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '道路运输证号' })
   transportLicenseNo: string;
 
-  @Column({ type: 'date', comment: '运输证有效期截止日期' })
+  @Column({ type: 'date', nullable: true, comment: '运输证有效期截止日期' })
   licenseExpiryDate: Date;
 
   @Column({ type: 'boolean', default: true, comment: '是否安装GPS设备' })
   hasGpsDevice: boolean;
+
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '垃圾种类' })
+  wasteType: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true, comment: 'GPS设备编号' })
   gpsDeviceId: string;

@@ -15,51 +15,59 @@ import { Type } from 'class-transformer';
 import { DisposalReceiptStatus } from './disposal-receipt.entity';
 
 export class CreateDisposalReceiptDto {
-  @ApiProperty({ description: '处置联单编号', example: 'ZL20240101001' })
+  @ApiPropertyOptional({ description: '处置联单编号', example: 'ZL20240101001' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  receiptNo: string;
+  receiptNo?: string;
 
   @ApiPropertyOptional({ description: '关联运输单ID', example: 'uuid-string' })
   @IsOptional()
   @IsUUID()
   transportOrderId?: string;
 
-  @ApiProperty({ description: '车牌号', example: '京A12345' })
+  @ApiPropertyOptional({ description: '车牌号', example: '京A12345' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  plateNumber: string;
+  plateNumber?: string;
 
-  @ApiProperty({ description: '运输企业名称', example: '北京市XX运输有限公司' })
+  @ApiPropertyOptional({ description: '运输企业名称', example: '北京市XX运输有限公司' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  companyName: string;
+  companyName?: string;
 
-  @ApiProperty({ description: '产生单位', example: '北京市XX垃圾产生单位' })
+  @ApiPropertyOptional({ description: '产生单位', example: '北京市XX垃圾产生单位' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  generatorUnit: string;
+  generatorUnit?: string;
 
-  @ApiProperty({ description: '运输单位', example: '北京市XX运输有限公司' })
+  @ApiPropertyOptional({ description: '运输单位', example: '北京市XX运输有限公司' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  transportUnit: string;
+  transportUnit?: string;
 
-  @ApiProperty({ description: '处置单位', example: '北京市XX垃圾处置厂' })
+  @ApiPropertyOptional({ description: '处置单位', example: '北京市XX垃圾处置厂' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  disposalUnit: string;
+  disposalUnit?: string;
 
-  @ApiProperty({ description: '垃圾种类', example: '建筑垃圾' })
+  @ApiPropertyOptional({ description: '垃圾种类', example: '建筑垃圾' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  wasteType: string;
+  wasteType?: string;
 
-  @ApiProperty({ description: '联单载明重量(吨)', example: 20.5 })
+  @ApiPropertyOptional({ description: '联单载明重量(吨)', example: 20.5 })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  receiptWeight: number;
+  receiptWeight?: number;
+
+  @ApiPropertyOptional({ description: '联单载明重量(吨) - 别名', example: 20.5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  weight?: number;
 
   @ApiPropertyOptional({ description: '实际称重重量(吨)', example: 20.3 })
   @IsOptional()
@@ -68,20 +76,35 @@ export class CreateDisposalReceiptDto {
   @Min(0)
   actualWeight?: number;
 
-  @ApiProperty({ description: '装载日期', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: '装载日期', example: '2024-01-01' })
+  @IsOptional()
   @IsDateString()
-  @IsNotEmpty()
-  loadingDate: Date;
+  loadingDate?: Date;
 
-  @ApiProperty({ description: '装货地点', example: '北京市朝阳区XX工地' })
+  @ApiPropertyOptional({ description: '装货地点', example: '北京市朝阳区XX工地' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  loadingAddress: string;
+  loadingAddress?: string;
 
-  @ApiProperty({ description: '卸货/处置地点', example: '北京市大兴区XX处置场' })
+  @ApiPropertyOptional({ description: '卸货/处置地点', example: '北京市大兴区XX处置场' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  disposalAddress: string;
+  disposalAddress?: string;
+
+  @ApiPropertyOptional({ description: '处置时间 - 别名', example: '2024-01-20 15:30:00' })
+  @IsOptional()
+  @IsString()
+  disposalTime?: string;
+
+  @ApiPropertyOptional({ description: '接收人 - 别名', example: '李经理' })
+  @IsOptional()
+  @IsString()
+  receiverName?: string;
+
+  @ApiPropertyOptional({ description: '驾驶员姓名 - 别名', example: '张三' })
+  @IsOptional()
+  @IsString()
+  driverName?: string;
 
   @ApiPropertyOptional({ description: '装货经办人', example: '张三' })
   @IsOptional()
@@ -226,13 +249,18 @@ export class QueryDisposalReceiptDto {
 }
 
 export class MatchReceiptDto {
-  @ApiProperty({ description: '运输单ID', example: 'uuid-string' })
+  @ApiPropertyOptional({ description: '运输单ID', example: 'uuid-string' })
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  transportOrderId: string;
+  transportOrderId?: string;
 
-  @ApiProperty({ description: '匹配人', example: '管理员' })
+  @ApiPropertyOptional({ description: '匹配人', example: '管理员' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  matchedBy: string;
+  matchedBy?: string;
+
+  @ApiPropertyOptional({ description: '备注 - 别名', example: '匹配备注' })
+  @IsOptional()
+  @IsString()
+  remark?: string;
 }

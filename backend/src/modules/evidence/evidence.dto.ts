@@ -14,45 +14,46 @@ import { Type } from 'class-transformer';
 import { EvidenceType, EvidenceStatus } from './evidence.entity';
 
 export class CreateEvidenceDto {
-  @ApiProperty({ description: '关联告警ID', example: 'uuid-string' })
+  @ApiPropertyOptional({ description: '关联告警ID', example: 'uuid-string' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  alertId: string;
+  alertId?: string;
 
-  @ApiProperty({ description: '关联运输单ID', example: 'uuid-string' })
+  @ApiPropertyOptional({ description: '关联运输单ID', example: 'uuid-string' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  transportOrderId: string;
+  transportOrderId?: string;
 
-  @ApiProperty({ description: '车牌号', example: '京A12345' })
+  @ApiPropertyOptional({ description: '车牌号', example: '京A12345' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  plateNumber: string;
+  plateNumber?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: '证据类型',
     enum: EvidenceType,
     example: EvidenceType.IMAGE,
   })
+  @IsOptional()
   @IsEnum(EvidenceType)
-  @IsNotEmpty()
-  type: EvidenceType;
+  type?: EvidenceType;
 
-  @ApiProperty({ description: '证据文件名称', example: 'evidence_20240101.jpg' })
+  @ApiPropertyOptional({ description: '证据文件名称', example: 'evidence_20240101.jpg' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  fileName: string;
+  fileName?: string;
 
-  @ApiProperty({ description: '证据文件存储路径', example: '/uploads/evidence/20240101/' })
+  @ApiPropertyOptional({ description: '证据文件存储路径', example: '/uploads/evidence/20240101/' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  filePath: string;
+  filePath?: string;
 
-  @ApiProperty({ description: '文件大小(字节)', example: 1024000 })
+  @ApiPropertyOptional({ description: '文件大小(字节)', example: 1024000 })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  fileSize: number;
+  fileSize?: number;
 
   @ApiPropertyOptional({ description: '证据描述', example: '车辆违规照片' })
   @IsOptional()
@@ -75,15 +76,15 @@ export class CreateEvidenceDto {
   @IsNumber()
   latitude?: number;
 
-  @ApiProperty({ description: '证据采集时间', example: '2024-01-01T10:00:00Z' })
+  @ApiPropertyOptional({ description: '证据采集时间', example: '2024-01-01T10:00:00Z' })
+  @IsOptional()
   @IsDateString()
-  @IsNotEmpty()
-  collectedAt: Date;
+  collectedAt?: Date;
 
-  @ApiProperty({ description: '采集方式', example: '自动抓拍' })
+  @ApiPropertyOptional({ description: '采集方式', example: '自动抓拍' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  collectedBy: string;
+  collectedBy?: string;
 }
 
 export class QueryEvidenceDto {
@@ -135,17 +136,17 @@ export class QueryEvidenceDto {
 }
 
 export class FixEvidenceDto {
-  @ApiProperty({ description: '固化操作员', example: '操作员张三' })
+  @ApiPropertyOptional({ description: '固化操作员', example: '操作员张三' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  fixedBy: string;
+  fixedBy?: string;
 }
 
 export class VerifyEvidenceDto {
-  @ApiProperty({ description: '审核人', example: '审核员李四' })
+  @ApiPropertyOptional({ description: '审核人', example: '审核员李四' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  verifiedBy: string;
+  verifiedBy?: string;
 
   @ApiPropertyOptional({ description: '审核意见', example: '证据真实有效' })
   @IsOptional()

@@ -27,24 +27,24 @@ export class TransportOrder {
   id: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 50, comment: '运输单号' })
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '运输单号' })
   orderNo: string;
 
-  @Column({ type: 'uuid', comment: '车辆ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '车辆ID' })
   vehicleId: string;
 
   @ManyToOne(() => Vehicle)
   @JoinColumn({ name: 'vehicleId' })
   vehicle: Vehicle;
 
-  @Column({ type: 'uuid', comment: '装货点围栏ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '装货点围栏ID' })
   loadingFenceId: string;
 
   @ManyToOne(() => Fence)
   @JoinColumn({ name: 'loadingFenceId' })
   loadingFence: Fence;
 
-  @Column({ type: 'uuid', comment: '卸货点围栏ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '卸货点围栏ID' })
   unloadingFenceId: string;
 
   @ManyToOne(() => Fence)
@@ -54,13 +54,13 @@ export class TransportOrder {
   @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true, comment: '计划路线(GeoJSON LineString)' })
   plannedRoute: any;
 
-  @Column({ type: 'decimal', precision: 8, scale: 2, comment: '计划载重量(吨)' })
+  @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true, comment: '计划载重量(吨)' })
   plannedWeight: number;
 
   @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true, comment: '实际载重量(吨)' })
   actualWeight: number;
 
-  @Column({ type: 'varchar', length: 100, comment: '垃圾种类' })
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '垃圾种类' })
   wasteType: string;
 
   @Column({

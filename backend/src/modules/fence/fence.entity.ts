@@ -30,6 +30,7 @@ export class Fence {
   @Column({
     type: 'enum',
     enum: FenceType,
+    nullable: true,
     comment: '围栏类型',
   })
   type: FenceType;
@@ -47,14 +48,15 @@ export class Fence {
     type: 'geometry',
     spatialFeatureType: 'Polygon',
     srid: 4326,
+    nullable: true,
     comment: '围栏几何区域',
   })
   geom: any;
 
-  @Column({ type: 'decimal', precision: 10, scale: 6, comment: '中心点经度' })
+  @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true, comment: '中心点经度' })
   centerLng: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 6, comment: '中心点纬度' })
+  @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true, comment: '中心点纬度' })
   centerLat: number;
 
   @Column({ type: 'decimal', precision: 8, scale: 2, default: 0, comment: '半径(米),圆形围栏使用' })

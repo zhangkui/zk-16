@@ -377,8 +377,38 @@ export class TransportOrderService {
 
   async update(id: string, updateTransportOrderDto: UpdateTransportOrderDto): Promise<TransportOrder> {
     const transportOrder = await this.findOne(id);
+    const dto = this.normalizeDto(updateTransportOrderDto);
 
-    const { vehicleId, loadingFenceId, unloadingFenceId, plannedRoute, ...otherData } = updateTransportOrderDto;
+    let vehicleId = dto.vehicleId;
+    let loadingFenceId = dto.loadingFenceId;
+    let unloadingFenceId = dto.unloadingFenceId;
+
+    if (!vehicleId && dto.plateNumber) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: dto.plateNumber } });
+      if (vehicle) {
+        vehicleId = vehicle.id;
+      }
+    }
+
+    if (!loadingFenceId && dto.loadingAddress) {
+      const loadingFences = await this.fenceRepository.find({
+        where: { type: FenceType.LOADING },
+        take: 1,
+      });
+      if (loadingFences.length > 0) {
+        loadingFenceId = loadingFences[0].id;
+      }
+    }
+
+    if (!unloadingFenceId && dto.unloadingAddress) {
+      const unloadingFences = await this.fenceRepository.find({
+        where: { type: FenceType.UNLOADING },
+        take: 1,
+      });
+      if (unloadingFences.length > 0) {
+        unloadingFenceId = unloadingFences[0].id;
+      }
+    }
 
     if (vehicleId || loadingFenceId || unloadingFenceId) {
       await this.validateVehicleAndFences(
@@ -387,6 +417,8 @@ export class TransportOrderService {
         unloadingFenceId || transportOrder.unloadingFenceId,
       );
     }
+
+    const { vehicleId: _v, loadingFenceId: _l, unloadingFenceId: _u, plannedRoute, plateNumber, loadingAddress, unloadingAddress, driverName, weight, expectedStartTime, expectedEndTime, ...otherData } = dto;
 
     Object.assign(transportOrder, otherData);
 

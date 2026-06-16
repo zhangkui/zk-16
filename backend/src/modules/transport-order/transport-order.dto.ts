@@ -1,7 +1,6 @@
 import {
   IsString,
   IsNotEmpty,
-  IsEnum,
   IsOptional,
   IsNumber,
   IsDateString,
@@ -16,6 +15,23 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { TransportOrderStatus } from './transport-order.entity';
+
+const ALLOWED_STATUSES = [
+  TransportOrderStatus.PENDING,
+  TransportOrderStatus.IN_TRANSIT,
+  TransportOrderStatus.LOADING,
+  TransportOrderStatus.UNLOADING,
+  TransportOrderStatus.COMPLETED,
+  TransportOrderStatus.CANCELLED,
+  TransportOrderStatus.VIOLATION,
+  'transporting',
+  'pending',
+  'loading',
+  'unloading',
+  'completed',
+  'cancelled',
+  'violation',
+];
 
 class GeoJsonLineStringDto {
   @ApiProperty({ description: 'GeoJSON 类型', example: 'LineString' })
@@ -122,15 +138,35 @@ export class UpdateTransportOrderDto {
   @IsUUID()
   vehicleId?: string;
 
+  @ApiPropertyOptional({ description: '车牌号 - 别名', example: '京A12345' })
+  @IsOptional()
+  @IsString()
+  plateNumber?: string;
+
+  @ApiPropertyOptional({ description: '驾驶员姓名' })
+  @IsOptional()
+  @IsString()
+  driverName?: string;
+
   @ApiPropertyOptional({ description: '装货点围栏ID(UUID)' })
   @IsOptional()
   @IsUUID()
   loadingFenceId?: string;
 
+  @ApiPropertyOptional({ description: '装载地点 - 别名', example: '北京化工厂' })
+  @IsOptional()
+  @IsString()
+  loadingAddress?: string;
+
   @ApiPropertyOptional({ description: '卸货点围栏ID(UUID)' })
   @IsOptional()
   @IsUUID()
   unloadingFenceId?: string;
+
+  @ApiPropertyOptional({ description: '卸载地点 - 别名', example: '危险废物处置中心' })
+  @IsOptional()
+  @IsString()
+  unloadingAddress?: string;
 
   @ApiPropertyOptional({ description: '计划路线(GeoJSON LineString 格式)', type: GeoJsonLineStringDto })
   @IsOptional()
@@ -145,6 +181,13 @@ export class UpdateTransportOrderDto {
   @Min(0)
   plannedWeight?: number;
 
+  @ApiPropertyOptional({ description: '计划载重量(吨) - 别名', example: 20.5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  weight?: number;
+
   @ApiPropertyOptional({ description: '实际载重量(吨)' })
   @IsOptional()
   @Type(() => Number)
@@ -158,22 +201,31 @@ export class UpdateTransportOrderDto {
   wasteType?: string;
 
   @ApiPropertyOptional({
-    description: '运输状态',
-    enum: TransportOrderStatus,
+    description: '运输状态(支持前端值: transporting等)',
   })
   @IsOptional()
-  @IsEnum(TransportOrderStatus)
-  status?: TransportOrderStatus;
+  @IsIn(ALLOWED_STATUSES, { message: '状态值不正确' })
+  status?: string;
 
   @ApiPropertyOptional({ description: '预计出发时间' })
   @IsOptional()
   @IsDateString()
   plannedDepartureTime?: Date;
 
+  @ApiPropertyOptional({ description: '预计开始时间 - 别名', example: '2024-01-15T08:00:00Z' })
+  @IsOptional()
+  @IsDateString()
+  expectedStartTime?: string;
+
   @ApiPropertyOptional({ description: '预计到达时间' })
   @IsOptional()
   @IsDateString()
   plannedArrivalTime?: Date;
+
+  @ApiPropertyOptional({ description: '预计结束时间 - 别名', example: '2024-01-15T18:00:00Z' })
+  @IsOptional()
+  @IsDateString()
+  expectedEndTime?: string;
 
   @ApiPropertyOptional({ description: '实际出发时间' })
   @IsOptional()
@@ -226,23 +278,6 @@ export class UpdateTransportOrderDto {
   @IsString()
   remark?: string;
 }
-
-const ALLOWED_STATUSES = [
-  TransportOrderStatus.PENDING,
-  TransportOrderStatus.IN_TRANSIT,
-  TransportOrderStatus.LOADING,
-  TransportOrderStatus.UNLOADING,
-  TransportOrderStatus.COMPLETED,
-  TransportOrderStatus.CANCELLED,
-  TransportOrderStatus.VIOLATION,
-  'transporting',
-  'pending',
-  'loading',
-  'unloading',
-  'completed',
-  'cancelled',
-  'violation',
-];
 
 export class QueryTransportOrderDto {
   @ApiPropertyOptional({ description: '运输单号(模糊查询)' })
@@ -316,4 +351,20 @@ export class RecordDeviationDto {
   @IsNumber()
   @Min(0)
   distance: number;
+}
+
+export class CompleteTransportOrderDto {
+  @ApiPropertyOptional({ description: '实际载重量(吨)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  actualWeight?: number;
+}
+
+export class CancelTransportOrderDto {
+  @ApiPropertyOptional({ description: '取消备注' })
+  @IsOptional()
+  @IsString()
+  remark?: string;
 }

@@ -14,7 +14,22 @@ export class FenceService {
   private normalizeDto(dto: any): any {
     const normalized = { ...dto };
 
-    if (normalized.fenceType && !normalized.type) {
+    if (normalized.shapeType && ['polygon', 'circle'].includes(normalized.shapeType)) {
+      (normalized as any)._shapeType = normalized.shapeType;
+    } else if (normalized.type && ['polygon', 'circle'].includes(normalized.type)) {
+      (normalized as any)._shapeType = normalized.type;
+    }
+
+    const fenceTypeAliasMap: Record<string, string> = {
+      forbidden: FenceType.RESTRICTED,
+      storage: FenceType.PERMIT,
+    };
+
+    if (normalized.fenceType) {
+      normalized.fenceType = fenceTypeAliasMap[normalized.fenceType] || normalized.fenceType;
+    }
+
+    if (normalized.fenceType) {
       normalized.type = normalized.fenceType;
     }
 
@@ -29,6 +44,15 @@ export class FenceService {
 
     if (normalized.description && !normalized.remark) {
       normalized.remark = normalized.description;
+    }
+
+    if (normalized.coordinates && Array.isArray(normalized.coordinates) && normalized.coordinates.length > 0) {
+      if (Array.isArray(normalized.coordinates[0])) {
+        normalized.coordinates = normalized.coordinates.map((c: number[]) => ({
+          lng: c[1],
+          lat: c[0],
+        }));
+      }
     }
 
     return normalized;
@@ -82,7 +106,7 @@ export class FenceService {
 
     const queryBuilder = this.fenceRepository.createQueryBuilder('fence');
 
-    if (type) {
+    if (type && Object.values(FenceType).includes(type as FenceType)) {
       queryBuilder.andWhere('fence.type = :type', { type });
     }
 
@@ -199,6 +223,12 @@ export class FenceService {
   async toggleStatus(id: string): Promise<Fence> {
     const fence = await this.findOne(id);
     const newStatus = fence.status === FenceStatus.ACTIVE ? FenceStatus.INACTIVE : FenceStatus.ACTIVE;
+    await this.fenceRepository.update(id, { status: newStatus });
+    return this.findOne(id);
+  }
+
+  async setStatus(id: string, enabled: boolean): Promise<Fence> {
+    const newStatus = enabled ? FenceStatus.ACTIVE : FenceStatus.INACTIVE;
     await this.fenceRepository.update(id, { status: newStatus });
     return this.findOne(id);
   }

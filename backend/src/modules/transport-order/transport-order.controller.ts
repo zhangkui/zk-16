@@ -24,6 +24,8 @@ import {
   QueryTransportOrderDto,
   UpdateStatusDto,
   RecordDeviationDto,
+  CompleteTransportOrderDto,
+  CancelTransportOrderDto,
 } from './transport-order.dto';
 import { TransportOrder } from './transport-order.entity';
 
@@ -111,7 +113,7 @@ export class TransportOrderController {
   @ApiResponse({ status: 404, description: '运输单不存在' })
   complete(
     @Param('id') id: string,
-    @Body() body?: { actualWeight?: number },
+    @Body() body?: CompleteTransportOrderDto,
   ): Promise<TransportOrder> {
     return this.transportOrderService.complete(id, body?.actualWeight);
   }
@@ -124,7 +126,7 @@ export class TransportOrderController {
   @ApiResponse({ status: 404, description: '运输单不存在' })
   cancel(
     @Param('id') id: string,
-    @Body() body?: { remark?: string },
+    @Body() body?: CancelTransportOrderDto,
   ): Promise<TransportOrder> {
     return this.transportOrderService.cancel(id, body?.remark);
   }

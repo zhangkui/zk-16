@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Vehicle, VehicleStatus } from './vehicle.entity';
+import { Vehicle, VehicleStatus, VehicleType } from './vehicle.entity';
 import {
   CreateVehicleDto,
   UpdateVehicleDto,
@@ -17,6 +17,17 @@ export class VehicleService {
     private readonly vehicleRepository: Repository<Vehicle>,
   ) {}
 
+  private static readonly VEHICLE_TYPE_MAP: Record<string, VehicleType> = {
+    '厢式货车': VehicleType.DUMP_TRUCK,
+    '罐式货车': VehicleType.MIXER_TRUCK,
+    '自卸货车': VehicleType.FLATBED,
+    '冷藏车': VehicleType.CONTAINER_TRUCK,
+  };
+
+  private static readonly STATUS_MAP: Record<string, VehicleStatus> = {
+    disabled: VehicleStatus.SUSPENDED,
+  };
+
   private normalizeDto(dto: any): any {
     const normalized = { ...dto };
     if (normalized.company && !normalized.companyName) {
@@ -27,6 +38,12 @@ export class VehicleService {
     }
     if (normalized.remark && !normalized.auditRemark) {
       normalized.auditRemark = normalized.remark;
+    }
+    if (normalized.vehicleType && VehicleService.VEHICLE_TYPE_MAP[normalized.vehicleType]) {
+      normalized.vehicleType = VehicleService.VEHICLE_TYPE_MAP[normalized.vehicleType];
+    }
+    if (normalized.status && VehicleService.STATUS_MAP[normalized.status]) {
+      normalized.status = VehicleService.STATUS_MAP[normalized.status];
     }
     return normalized;
   }

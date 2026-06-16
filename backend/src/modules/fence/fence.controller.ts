@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
 import { FenceService } from './fence.service';
-import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto } from './fence.dto';
+import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto, ToggleStatusDto } from './fence.dto';
 import { Fence, FenceType } from './fence.entity';
 
 @ApiTags('电子围栏管理')
@@ -78,7 +78,10 @@ export class FenceController {
   @ApiParam({ name: 'id', description: '围栏ID' })
   @ApiResponse({ status: 200, description: '状态切换成功', type: Fence })
   @ApiResponse({ status: 404, description: '围栏不存在' })
-  toggleStatus(@Param('id') id: string): Promise<Fence> {
+  toggleStatus(@Param('id') id: string, @Body() toggleStatusDto?: ToggleStatusDto): Promise<Fence> {
+    if (toggleStatusDto && toggleStatusDto.enabled !== undefined) {
+      return this.fenceService.setStatus(id, toggleStatusDto.enabled);
+    }
     return this.fenceService.toggleStatus(id);
   }
 

@@ -10,6 +10,7 @@ import {
   Min,
   Max,
   IsInt,
+  IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -27,13 +28,22 @@ export class CreateVehicleDto {
   vin?: string;
 
   @ApiProperty({
-    description: '车辆类型',
+    description: '车辆类型(支持中文别名：厢式货车/罐式货车/自卸货车/冷藏车)',
     enum: VehicleType,
     example: VehicleType.DUMP_TRUCK,
   })
   @IsOptional()
-  @IsEnum(VehicleType)
-  vehicleType?: VehicleType;
+  @IsIn([
+    VehicleType.DUMP_TRUCK,
+    VehicleType.MIXER_TRUCK,
+    VehicleType.FLATBED,
+    VehicleType.CONTAINER_TRUCK,
+    '厢式货车',
+    '罐式货车',
+    '自卸货车',
+    '冷藏车',
+  ])
+  vehicleType?: string;
 
   @ApiProperty({ description: '车辆颜色', example: '黄色' })
   @IsOptional()
@@ -64,30 +74,30 @@ export class CreateVehicleDto {
   @IsString()
   company?: string;
 
-  @ApiProperty({ description: '驾驶员姓名', example: '张三' })
+  @ApiPropertyOptional({ description: '驾驶员姓名', example: '张三' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  driverName: string;
+  driverName?: string;
 
-  @ApiProperty({ description: '驾驶员联系电话', example: '13800138000' })
-  @IsPhoneNumber('CN')
-  @IsNotEmpty()
-  driverPhone: string;
-
-  @ApiProperty({ description: '驾驶员从业资格证号', example: '110101199001011234' })
+  @ApiPropertyOptional({ description: '驾驶员联系电话', example: '13800138000' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  driverLicenseNo: string;
+  driverPhone?: string;
 
-  @ApiProperty({ description: '道路运输证号', example: '京交运管证字110101001234号' })
+  @ApiPropertyOptional({ description: '驾驶员从业资格证号', example: '110101199001011234' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  transportLicenseNo: string;
+  driverLicenseNo?: string;
 
-  @ApiProperty({ description: '运输证有效期截止日期', example: '2027-12-31' })
+  @ApiPropertyOptional({ description: '道路运输证号', example: '京交运管证字110101001234号' })
+  @IsOptional()
+  @IsString()
+  transportLicenseNo?: string;
+
+  @ApiPropertyOptional({ description: '运输证有效期截止日期', example: '2027-12-31' })
+  @IsOptional()
   @IsDateString()
-  @IsNotEmpty()
-  licenseExpiryDate: Date;
+  licenseExpiryDate?: Date;
 
   @ApiProperty({ description: '是否安装GPS设备', example: true, default: true })
   @IsOptional()
@@ -122,13 +132,22 @@ export class UpdateVehicleDto {
   vin?: string;
 
   @ApiPropertyOptional({
-    description: '车辆类型',
+    description: '车辆类型(支持中文别名：厢式货车/罐式货车/自卸货车/冷藏车)',
     enum: VehicleType,
     example: VehicleType.DUMP_TRUCK,
   })
   @IsOptional()
-  @IsEnum(VehicleType)
-  vehicleType?: VehicleType;
+  @IsIn([
+    VehicleType.DUMP_TRUCK,
+    VehicleType.MIXER_TRUCK,
+    VehicleType.FLATBED,
+    VehicleType.CONTAINER_TRUCK,
+    '厢式货车',
+    '罐式货车',
+    '自卸货车',
+    '冷藏车',
+  ])
+  vehicleType?: string;
 
   @ApiPropertyOptional({ description: '车辆颜色', example: '黄色' })
   @IsOptional()
@@ -219,12 +238,19 @@ export class QueryVehicleDto {
   plateNumber?: string;
 
   @ApiPropertyOptional({
-    description: '备案状态',
+    description: '备案状态(支持别名：disabled对应suspended)',
     enum: VehicleStatus,
   })
   @IsOptional()
-  @IsEnum(VehicleStatus)
-  status?: VehicleStatus;
+  @IsIn([
+    VehicleStatus.PENDING,
+    VehicleStatus.APPROVED,
+    VehicleStatus.REJECTED,
+    VehicleStatus.EXPIRED,
+    VehicleStatus.SUSPENDED,
+    'disabled',
+  ])
+  status?: string;
 
   @ApiPropertyOptional({ description: '运输企业名称(模糊查询)' })
   @IsOptional()
@@ -263,25 +289,25 @@ export class ApproveVehicleDto {
   @IsString()
   remark?: string;
 
-  @ApiProperty({ description: '审核人', example: '管理员' })
+  @ApiPropertyOptional({ description: '审核人', example: '管理员' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  auditor: string;
+  auditor?: string;
 }
 
 export class RejectVehicleDto {
-  @ApiProperty({ description: '审核意见/拒绝原因', example: '运输证已过期' })
+  @ApiPropertyOptional({ description: '审核意见/拒绝原因', example: '运输证已过期' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  auditRemark: string;
+  auditRemark?: string;
 
   @ApiPropertyOptional({ description: '审核意见/拒绝原因 - 别名', example: '运输证已过期' })
   @IsOptional()
   @IsString()
   remark?: string;
 
-  @ApiProperty({ description: '审核人', example: '管理员' })
+  @ApiPropertyOptional({ description: '审核人', example: '管理员' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  auditor: string;
+  auditor?: string;
 }
