@@ -1,12 +1,64 @@
-import { IsString, IsNumber, IsOptional, IsNotEmpty, IsEnum, IsInt, Min, IsDateString, IsUUID } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsNotEmpty, IsEnum, IsInt, Min, IsDateString, IsUUID, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { AlertType, AlertLevel, AlertStatus } from './alert.entity';
 
+const ALLOWED_ALERT_TYPES = [
+  AlertType.ROUTE_DEVIATION,
+  AlertType.FENCE_BREACH,
+  AlertType.TIME_VIOLATION,
+  AlertType.WEIGHT_OVERLOAD,
+  AlertType.SPEEDING,
+  AlertType.STAY_TOO_LONG,
+  AlertType.UNAPPROVED_VEHICLE,
+  AlertType.RECEIPT_MISMATCH,
+  'route_deviation',
+  'fence_breach',
+  'fence_violation',
+  'time_violation',
+  'timeout',
+  'weight_overload',
+  'speeding',
+  'stay_too_long',
+  'unapproved_vehicle',
+  'receipt_mismatch',
+  'other',
+];
+
+const ALLOWED_ALERT_STATUSES = [
+  AlertStatus.PENDING,
+  AlertStatus.ACKNOWLEDGED,
+  AlertStatus.PROCESSED,
+  AlertStatus.IGNORED,
+  AlertStatus.CLOSED,
+  'pending',
+  'active',
+  'acknowledged',
+  'processed',
+  'processing',
+  'ignored',
+  'closed',
+];
+
+const ALLOWED_ALERT_LEVELS = [
+  AlertLevel.INFO,
+  AlertLevel.WARNING,
+  AlertLevel.DANGER,
+  AlertLevel.CRITICAL,
+  'info',
+  'low',
+  'warning',
+  'medium',
+  'danger',
+  'high',
+  'critical',
+];
+
 export class CreateAlertDto {
   @ApiProperty({ description: '运输单ID' })
+  @IsOptional()
   @IsUUID()
-  transportOrderId: string;
+  transportOrderId?: string;
 
   @ApiProperty({ description: '车牌号', example: '京A12345' })
   @IsString()
@@ -14,13 +66,19 @@ export class CreateAlertDto {
   plateNumber: string;
 
   @ApiProperty({ description: '告警类型', enum: AlertType })
-  @IsEnum(AlertType)
-  type: AlertType;
+  @IsOptional()
+  @IsIn(ALLOWED_ALERT_TYPES, { message: '告警类型不正确' })
+  type?: string;
+
+  @ApiPropertyOptional({ description: '告警类型 - 别名', enum: AlertType })
+  @IsOptional()
+  @IsIn(ALLOWED_ALERT_TYPES, { message: '告警类型不正确' })
+  alertType?: string;
 
   @ApiPropertyOptional({ description: '告警级别', enum: AlertLevel, default: AlertLevel.WARNING })
   @IsOptional()
-  @IsEnum(AlertLevel)
-  level?: AlertLevel;
+  @IsIn(ALLOWED_ALERT_LEVELS, { message: '告警级别不正确' })
+  level?: string;
 
   @ApiProperty({ description: '告警标题', example: '车辆偏离规划路线' })
   @IsString()
@@ -75,18 +133,23 @@ export class QueryAlertDto {
 
   @ApiPropertyOptional({ description: '告警类型', enum: AlertType })
   @IsOptional()
-  @IsEnum(AlertType)
-  type?: AlertType;
+  @IsIn(ALLOWED_ALERT_TYPES, { message: '告警类型不正确' })
+  type?: string;
+
+  @ApiPropertyOptional({ description: '告警类型 - 别名', enum: AlertType })
+  @IsOptional()
+  @IsIn(ALLOWED_ALERT_TYPES, { message: '告警类型不正确' })
+  alertType?: string;
 
   @ApiPropertyOptional({ description: '告警级别', enum: AlertLevel })
   @IsOptional()
-  @IsEnum(AlertLevel)
-  level?: AlertLevel;
+  @IsIn(ALLOWED_ALERT_LEVELS, { message: '告警级别不正确' })
+  level?: string;
 
   @ApiPropertyOptional({ description: '告警状态', enum: AlertStatus })
   @IsOptional()
-  @IsEnum(AlertStatus)
-  status?: AlertStatus;
+  @IsIn(ALLOWED_ALERT_STATUSES, { message: '告警状态不正确' })
+  status?: string;
 
   @ApiPropertyOptional({ description: '开始时间 (ISO 格式)' })
   @IsOptional()
@@ -115,12 +178,22 @@ export class QueryAlertDto {
 
 export class HandleAlertDto {
   @ApiProperty({ description: '处理人', example: '张三' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  handler: string;
+  handler?: string;
 
   @ApiPropertyOptional({ description: '处理意见', example: '已联系司机确认路线' })
   @IsOptional()
   @IsString()
   handleRemark?: string;
+
+  @ApiPropertyOptional({ description: '处理意见 - 别名', example: '已联系司机确认路线' })
+  @IsOptional()
+  @IsString()
+  remark?: string;
+
+  @ApiPropertyOptional({ description: '关闭说明 - 别名', example: '告警已处理' })
+  @IsOptional()
+  @IsString()
+  processRemark?: string;
 }

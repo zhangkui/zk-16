@@ -22,34 +22,47 @@ export class CreateVehicleDto {
   plateNumber: string;
 
   @ApiProperty({ description: '车辆识别码(VIN)', example: 'LBV5S1108FSJ12345' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  vin: string;
+  vin?: string;
 
   @ApiProperty({
     description: '车辆类型',
     enum: VehicleType,
     example: VehicleType.DUMP_TRUCK,
   })
+  @IsOptional()
   @IsEnum(VehicleType)
-  @IsNotEmpty()
-  vehicleType: VehicleType;
+  vehicleType?: VehicleType;
 
   @ApiProperty({ description: '车辆颜色', example: '黄色' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  color: string;
+  color?: string;
 
   @ApiProperty({ description: '核定载重量(吨)', example: 20.5 })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  loadCapacity: number;
+  loadCapacity?: number;
+
+  @ApiProperty({ description: '核定载重量(吨) - 别名', example: 20.5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  capacity?: number;
 
   @ApiProperty({ description: '所属运输企业', example: '北京市XX运输有限公司' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  companyName: string;
+  companyName?: string;
+
+  @ApiProperty({ description: '所属运输企业 - 别名', example: '北京市XX运输有限公司' })
+  @IsOptional()
+  @IsString()
+  company?: string;
 
   @ApiProperty({ description: '驾驶员姓名', example: '张三' })
   @IsString()
@@ -85,6 +98,16 @@ export class CreateVehicleDto {
   @IsOptional()
   @IsString()
   gpsDeviceId?: string;
+
+  @ApiPropertyOptional({ description: '垃圾种类', example: '建筑垃圾' })
+  @IsOptional()
+  @IsString()
+  wasteType?: string;
+
+  @ApiPropertyOptional({ description: '备注', example: '备注信息' })
+  @IsOptional()
+  @IsString()
+  remark?: string;
 }
 
 export class UpdateVehicleDto {
@@ -119,10 +142,22 @@ export class UpdateVehicleDto {
   @Min(0)
   loadCapacity?: number;
 
+  @ApiPropertyOptional({ description: '核定载重量(吨) - 别名', example: 20.5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  capacity?: number;
+
   @ApiPropertyOptional({ description: '所属运输企业', example: '北京市XX运输有限公司' })
   @IsOptional()
   @IsString()
   companyName?: string;
+
+  @ApiPropertyOptional({ description: '所属运输企业 - 别名', example: '北京市XX运输有限公司' })
+  @IsOptional()
+  @IsString()
+  company?: string;
 
   @ApiPropertyOptional({ description: '驾驶员姓名', example: '张三' })
   @IsOptional()
@@ -158,6 +193,16 @@ export class UpdateVehicleDto {
   @IsOptional()
   @IsString()
   gpsDeviceId?: string;
+
+  @ApiPropertyOptional({ description: '垃圾种类', example: '建筑垃圾' })
+  @IsOptional()
+  @IsString()
+  wasteType?: string;
+
+  @ApiPropertyOptional({ description: '备注', example: '备注信息' })
+  @IsOptional()
+  @IsString()
+  remark?: string;
 }
 
 export class VerifyVehicleDto {
@@ -186,6 +231,11 @@ export class QueryVehicleDto {
   @IsString()
   companyName?: string;
 
+  @ApiPropertyOptional({ description: '运输企业名称(模糊查询) - 别名' })
+  @IsOptional()
+  @IsString()
+  company?: string;
+
   @ApiPropertyOptional({ description: '页码', default: 1, example: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -208,6 +258,11 @@ export class ApproveVehicleDto {
   @IsString()
   auditRemark?: string;
 
+  @ApiPropertyOptional({ description: '审核意见 - 别名', example: '资料齐全，审核通过' })
+  @IsOptional()
+  @IsString()
+  remark?: string;
+
   @ApiProperty({ description: '审核人', example: '管理员' })
   @IsString()
   @IsNotEmpty()
@@ -219,6 +274,11 @@ export class RejectVehicleDto {
   @IsString()
   @IsNotEmpty()
   auditRemark: string;
+
+  @ApiPropertyOptional({ description: '审核意见/拒绝原因 - 别名', example: '运输证已过期' })
+  @IsOptional()
+  @IsString()
+  remark?: string;
 
   @ApiProperty({ description: '审核人', example: '管理员' })
   @IsString()

@@ -11,6 +11,7 @@ import {
   Max,
   IsObject,
   ValidateNested,
+  IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -35,35 +36,73 @@ class GeoJsonLineStringDto {
 
 export class CreateTransportOrderDto {
   @ApiProperty({ description: '车辆ID(UUID)', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  vehicleId: string;
+  vehicleId?: string;
+
+  @ApiPropertyOptional({ description: '车牌号 - 别名', example: '京A12345' })
+  @IsOptional()
+  @IsString()
+  plateNumber?: string;
+
+  @ApiPropertyOptional({ description: '驾驶员姓名', example: '张三' })
+  @IsOptional()
+  @IsString()
+  driverName?: string;
 
   @ApiProperty({ description: '装货点围栏ID(UUID)', example: '550e8400-e29b-41d4-a716-446655440001' })
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  loadingFenceId: string;
+  loadingFenceId?: string;
+
+  @ApiPropertyOptional({ description: '装载地点 - 别名', example: '北京化工厂' })
+  @IsOptional()
+  @IsString()
+  loadingAddress?: string;
 
   @ApiProperty({ description: '卸货点围栏ID(UUID)', example: '550e8400-e29b-41d4-a716-446655440002' })
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  unloadingFenceId: string;
+  unloadingFenceId?: string;
+
+  @ApiPropertyOptional({ description: '卸载地点 - 别名', example: '危险废物处置中心' })
+  @IsOptional()
+  @IsString()
+  unloadingAddress?: string;
 
   @ApiProperty({ description: '计划载重量(吨)', example: 20.5 })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  plannedWeight: number;
+  plannedWeight?: number;
+
+  @ApiPropertyOptional({ description: '计划载重量(吨) - 别名', example: 20.5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  weight?: number;
 
   @ApiProperty({ description: '垃圾种类', example: '建筑垃圾' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  wasteType: string;
+  wasteType?: string;
 
   @ApiProperty({ description: '预计出发时间', example: '2024-01-15T08:00:00Z' })
+  @IsOptional()
   @IsDateString()
-  @IsNotEmpty()
-  plannedDepartureTime: Date;
+  plannedDepartureTime?: Date;
+
+  @ApiPropertyOptional({ description: '预计开始时间 - 别名', example: '2024-01-15T08:00:00Z' })
+  @IsOptional()
+  @IsDateString()
+  expectedStartTime?: string;
+
+  @ApiPropertyOptional({ description: '预计到达时间', example: '2024-01-15T18:00:00Z' })
+  @IsOptional()
+  @IsDateString()
+  expectedEndTime?: string;
 
   @ApiProperty({ description: '计划路线(GeoJSON LineString 格式)', type: GeoJsonLineStringDto })
   @IsOptional()
@@ -188,6 +227,23 @@ export class UpdateTransportOrderDto {
   remark?: string;
 }
 
+const ALLOWED_STATUSES = [
+  TransportOrderStatus.PENDING,
+  TransportOrderStatus.IN_TRANSIT,
+  TransportOrderStatus.LOADING,
+  TransportOrderStatus.UNLOADING,
+  TransportOrderStatus.COMPLETED,
+  TransportOrderStatus.CANCELLED,
+  TransportOrderStatus.VIOLATION,
+  'transporting',
+  'pending',
+  'loading',
+  'unloading',
+  'completed',
+  'cancelled',
+  'violation',
+];
+
 export class QueryTransportOrderDto {
   @ApiPropertyOptional({ description: '运输单号(模糊查询)' })
   @IsOptional()
@@ -204,8 +260,8 @@ export class QueryTransportOrderDto {
     enum: TransportOrderStatus,
   })
   @IsOptional()
-  @IsEnum(TransportOrderStatus)
-  status?: TransportOrderStatus;
+  @IsIn(ALLOWED_STATUSES, { message: '状态值不正确' })
+  status?: string;
 
   @ApiPropertyOptional({ description: '车辆ID(UUID)' })
   @IsOptional()
@@ -244,9 +300,9 @@ export class UpdateStatusDto {
     enum: TransportOrderStatus,
     example: TransportOrderStatus.IN_TRANSIT,
   })
-  @IsEnum(TransportOrderStatus)
+  @IsIn(ALLOWED_STATUSES, { message: '状态值不正确' })
   @IsNotEmpty()
-  status: TransportOrderStatus;
+  status: string;
 
   @ApiPropertyOptional({ description: '备注', example: '已到达装货点' })
   @IsOptional()

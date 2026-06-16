@@ -26,47 +26,110 @@ export class AlertService {
     private readonly kafkaService: KafkaService,
   ) {}
 
+  private normalizeDto(dto: any): any {
+    const normalized = { ...dto };
+
+    if (normalized.alertType && !normalized.type) {
+      const typeMap: Record<string, AlertType> = {
+        'speeding': AlertType.SPEEDING,
+        'route_deviation': AlertType.ROUTE_DEVIATION,
+        'fence_breach': AlertType.FENCE_BREACH,
+        'fence_violation': AlertType.FENCE_BREACH,
+        'time_violation': AlertType.TIME_VIOLATION,
+        'timeout': AlertType.TIME_VIOLATION,
+        'weight_overload': AlertType.WEIGHT_OVERLOAD,
+        'stay_too_long': AlertType.STAY_TOO_LONG,
+        'unapproved_vehicle': AlertType.UNAPPROVED_VEHICLE,
+        'receipt_mismatch': AlertType.RECEIPT_MISMATCH,
+      };
+      if (typeMap[normalized.alertType]) {
+        normalized.type = typeMap[normalized.alertType];
+      }
+    }
+
+    if (normalized.level) {
+      const levelMap: Record<string, AlertLevel> = {
+        'info': AlertLevel.INFO,
+        'low': AlertLevel.INFO,
+        'warning': AlertLevel.WARNING,
+        'medium': AlertLevel.WARNING,
+        'danger': AlertLevel.DANGER,
+        'high': AlertLevel.DANGER,
+        'critical': AlertLevel.CRITICAL,
+      };
+      if (levelMap[normalized.level]) {
+        normalized.level = levelMap[normalized.level];
+      }
+    }
+
+    if (normalized.status) {
+      const statusMap: Record<string, AlertStatus> = {
+        'pending': AlertStatus.PENDING,
+        'active': AlertStatus.PENDING,
+        'acknowledged': AlertStatus.ACKNOWLEDGED,
+        'processed': AlertStatus.PROCESSED,
+        'processing': AlertStatus.PROCESSED,
+        'ignored': AlertStatus.IGNORED,
+        'closed': AlertStatus.CLOSED,
+      };
+      if (statusMap[normalized.status]) {
+        normalized.status = statusMap[normalized.status];
+      }
+    }
+
+    if (normalized.remark && !normalized.handleRemark) {
+      normalized.handleRemark = normalized.remark;
+    }
+
+    if (normalized.processRemark && !normalized.handleRemark) {
+      normalized.handleRemark = normalized.processRemark;
+    }
+
+    return normalized;
+  }
+
   async createAlert(createAlertDto: CreateAlertDto): Promise<Alert> {
+    const dto = this.normalizeDto(createAlertDto);
     const existingAlert = await this.alertRepository.findOne({
       where: {
-        transportOrderId: createAlertDto.transportOrderId,
-        type: createAlertDto.type,
+        transportOrderId: dto.transportOrderId,
+        type: dto.type as AlertType,
         status: In([AlertStatus.PENDING, AlertStatus.ACKNOWLEDGED]),
       },
       order: { alertTime: 'DESC' },
     });
 
     if (existingAlert) {
-      const timeDiff = new Date(createAlertDto.alertTime).getTime() - existingAlert.alertTime.getTime();
+      const timeDiff = new Date(dto.alertTime).getTime() - existingAlert.alertTime.getTime();
       if (timeDiff < 5 * 60 * 1000) {
         existingAlert.repeatCount += 1;
-        if (createAlertDto.longitude !== undefined) {
-          existingAlert.longitude = createAlertDto.longitude;
+        if (dto.longitude !== undefined) {
+          existingAlert.longitude = dto.longitude;
         }
-        if (createAlertDto.latitude !== undefined) {
-          existingAlert.latitude = createAlertDto.latitude;
+        if (dto.latitude !== undefined) {
+          existingAlert.latitude = dto.latitude;
         }
-        if (createAlertDto.deviationDistance !== undefined) {
-          existingAlert.deviationDistance = createAlertDto.deviationDistance;
+        if (dto.deviationDistance !== undefined) {
+          existingAlert.deviationDistance = dto.deviationDistance;
         }
-        existingAlert.alertTime = new Date(createAlertDto.alertTime);
+        existingAlert.alertTime = new Date(dto.alertTime);
         return this.alertRepository.save(existingAlert);
       }
     }
 
     const alert = this.alertRepository.create({
-      ...createAlertDto,
-      alertTime: new Date(createAlertDto.alertTime),
-      level: createAlertDto.level || AlertLevel.WARNING,
+      ...dto,
+      alertTime: new Date(dto.alertTime),
+      level: (dto.level as AlertLevel) || AlertLevel.WARNING,
       status: AlertStatus.PENDING,
-    });
+    } as Partial<Alert>);
 
-    const savedAlert = await this.alertRepository.save(alert);
+    const savedAlert = await this.alertRepository.save(alert as Alert);
 
     try {
       await this.kafkaService.sendAlert({
         id: savedAlert.id,
-        ...createAlertDto,
+        ...dto,
       });
     } catch (error) {
       this.logger.error('发送告警到Kafka失败:', error);
@@ -78,6 +141,7 @@ export class AlertService {
   async findAll(
     queryAlertDto: QueryAlertDto,
   ): Promise<{ data: Alert[]; total: number; page: number; pageSize: number }> {
+    const dto = this.normalizeDto(queryAlertDto);
     const {
       transportOrderId,
       plateNumber,
@@ -88,7 +152,7 @@ export class AlertService {
       timeTo,
       page = 1,
       pageSize = 20,
-    } = queryAlertDto;
+    } = dto;
 
     const queryBuilder = this.alertRepository.createQueryBuilder('alert');
 
@@ -138,6 +202,7 @@ export class AlertService {
   }
 
   async acknowledge(id: string, handleAlertDto: HandleAlertDto): Promise<Alert> {
+    const dto = this.normalizeDto(handleAlertDto);
     const alert = await this.findOne(id);
 
     if (alert.status !== AlertStatus.PENDING) {
@@ -145,14 +210,15 @@ export class AlertService {
     }
 
     alert.status = AlertStatus.ACKNOWLEDGED;
-    alert.handler = handleAlertDto.handler;
-    alert.handleRemark = handleAlertDto.handleRemark;
+    if (dto.handler) alert.handler = dto.handler;
+    if (dto.handleRemark) alert.handleRemark = dto.handleRemark;
     alert.handleTime = new Date();
 
     return this.alertRepository.save(alert);
   }
 
   async processAlert(id: string, handleAlertDto: HandleAlertDto): Promise<Alert> {
+    const dto = this.normalizeDto(handleAlertDto);
     const alert = await this.findOne(id);
 
     if (![AlertStatus.PENDING, AlertStatus.ACKNOWLEDGED].includes(alert.status)) {
@@ -162,16 +228,15 @@ export class AlertService {
     }
 
     alert.status = AlertStatus.PROCESSED;
-    alert.handler = handleAlertDto.handler;
-    if (handleAlertDto.handleRemark) {
-      alert.handleRemark = handleAlertDto.handleRemark;
-    }
+    if (dto.handler) alert.handler = dto.handler;
+    if (dto.handleRemark) alert.handleRemark = dto.handleRemark;
     alert.handleTime = new Date();
 
     return this.alertRepository.save(alert);
   }
 
   async closeAlert(id: string, handleAlertDto: HandleAlertDto): Promise<Alert> {
+    const dto = this.normalizeDto(handleAlertDto);
     const alert = await this.findOne(id);
 
     if (alert.status === AlertStatus.CLOSED) {
@@ -179,17 +244,16 @@ export class AlertService {
     }
 
     alert.status = AlertStatus.CLOSED;
-    alert.handler = handleAlertDto.handler;
-    if (handleAlertDto.handleRemark) {
-      alert.handleRemark = handleAlertDto.handleRemark;
-    }
+    if (dto.handler) alert.handler = dto.handler;
+    if (dto.handleRemark) alert.handleRemark = dto.handleRemark;
     alert.handleTime = new Date();
 
     return this.alertRepository.save(alert);
   }
 
   async getAlertStatistics(queryAlertDto: QueryAlertDto): Promise<AlertStatistics> {
-    const { transportOrderId, plateNumber, timeFrom, timeTo } = queryAlertDto;
+    const dto = this.normalizeDto(queryAlertDto);
+    const { transportOrderId, plateNumber, timeFrom, timeTo } = dto;
 
     const baseWhere: FindOptionsWhere<Alert> = {};
     if (transportOrderId) baseWhere.transportOrderId = transportOrderId;

@@ -23,6 +23,40 @@ export class TransportOrderService {
     private readonly fenceRepository: Repository<Fence>,
   ) {}
 
+  private normalizeDto(dto: any): any {
+    const normalized = { ...dto };
+
+    if (normalized.weight && !normalized.plannedWeight) {
+      normalized.plannedWeight = normalized.weight;
+    }
+
+    if (normalized.expectedStartTime && !normalized.plannedDepartureTime) {
+      normalized.plannedDepartureTime = normalized.expectedStartTime;
+    }
+
+    if (normalized.expectedEndTime && !normalized.plannedArrivalTime) {
+      normalized.plannedArrivalTime = normalized.expectedEndTime;
+    }
+
+    if (normalized.status) {
+      const statusMap: Record<string, TransportOrderStatus> = {
+        'transporting': TransportOrderStatus.IN_TRANSIT,
+        'in_transit': TransportOrderStatus.IN_TRANSIT,
+        'pending': TransportOrderStatus.PENDING,
+        'loading': TransportOrderStatus.LOADING,
+        'unloading': TransportOrderStatus.UNLOADING,
+        'completed': TransportOrderStatus.COMPLETED,
+        'cancelled': TransportOrderStatus.CANCELLED,
+        'violation': TransportOrderStatus.VIOLATION,
+      };
+      if (statusMap[normalized.status]) {
+        normalized.status = statusMap[normalized.status];
+      }
+    }
+
+    return normalized;
+  }
+
   private async generateOrderNo(): Promise<string> {
     const now = new Date();
     const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -95,30 +129,65 @@ export class TransportOrderService {
   }
 
   async create(createTransportOrderDto: CreateTransportOrderDto): Promise<TransportOrder> {
-    await this.validateVehicleAndFences(
-      createTransportOrderDto.vehicleId,
-      createTransportOrderDto.loadingFenceId,
-      createTransportOrderDto.unloadingFenceId,
-    );
+    const dto = this.normalizeDto(createTransportOrderDto);
+
+    let vehicleId = dto.vehicleId;
+    let loadingFenceId = dto.loadingFenceId;
+    let unloadingFenceId = dto.unloadingFenceId;
+
+    if (!vehicleId && dto.plateNumber) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: dto.plateNumber } });
+      if (vehicle) {
+        vehicleId = vehicle.id;
+      }
+    }
+
+    if (!loadingFenceId) {
+      const loadingFences = await this.fenceRepository.find({
+        where: { type: FenceType.LOADING },
+        take: 1,
+      });
+      if (loadingFences.length > 0) {
+        loadingFenceId = loadingFences[0].id;
+      }
+    }
+
+    if (!unloadingFenceId) {
+      const unloadingFences = await this.fenceRepository.find({
+        where: { type: FenceType.UNLOADING },
+        take: 1,
+      });
+      if (unloadingFences.length > 0) {
+        unloadingFenceId = unloadingFences[0].id;
+      }
+    }
+
+    if (vehicleId && loadingFenceId && unloadingFenceId) {
+      await this.validateVehicleAndFences(vehicleId, loadingFenceId, unloadingFenceId);
+    }
 
     const orderNo = await this.generateOrderNo();
 
     const transportOrder = this.transportOrderRepository.create({
-      ...createTransportOrderDto,
+      ...dto,
+      vehicleId: vehicleId || dto.vehicleId,
+      loadingFenceId: loadingFenceId || dto.loadingFenceId,
+      unloadingFenceId: unloadingFenceId || dto.unloadingFenceId,
       orderNo,
       status: TransportOrderStatus.PENDING,
       deviationCount: 0,
       totalDeviationDistance: 0,
       actualMileage: 0,
-    });
+    } as Partial<TransportOrder>);
 
-    return this.transportOrderRepository.save(transportOrder);
+    return this.transportOrderRepository.save(transportOrder as TransportOrder);
   }
 
   async findAll(
     queryTransportOrderDto: QueryTransportOrderDto,
   ): Promise<{ data: TransportOrder[]; total: number; page: number; pageSize: number }> {
-    const { orderNo, plateNumber, status, vehicleId, dateFrom, dateTo, page = 1, pageSize = 10 } = queryTransportOrderDto;
+    const dto = this.normalizeDto(queryTransportOrderDto);
+    const { orderNo, plateNumber, status, vehicleId, dateFrom, dateTo, page = 1, pageSize = 10 } = dto;
 
     const queryBuilder = this.transportOrderRepository
       .createQueryBuilder('transportOrder')
@@ -204,7 +273,9 @@ export class TransportOrderService {
 
   async updateStatus(id: string, updateStatusDto: UpdateStatusDto): Promise<TransportOrder> {
     const transportOrder = await this.findOne(id);
-    const { status, remark } = updateStatusDto;
+    const dto = this.normalizeDto(updateStatusDto);
+    const status = dto.status as TransportOrderStatus;
+    const { remark } = dto;
 
     this.validateStatusTransition(transportOrder.status, status);
 

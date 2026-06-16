@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsOptional, IsNumber, IsArray, IsNotEmpty, ArrayMinSize, ValidateIf, Matches, IsPhoneNumber } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsNumber, IsArray, IsNotEmpty, ArrayMinSize, ValidateIf, Matches, IsPhoneNumber, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { FenceType, FenceStatus } from './fence.entity';
@@ -20,13 +20,24 @@ export class CreateFenceDto {
   name: string;
 
   @ApiProperty({ description: '围栏类型', enum: FenceType, example: FenceType.LOADING })
+  @IsOptional()
   @IsEnum(FenceType)
-  type: FenceType;
+  type?: FenceType;
+
+  @ApiProperty({ description: '围栏类型 - 别名', enum: FenceType, example: FenceType.LOADING })
+  @IsOptional()
+  @IsEnum(FenceType)
+  fenceType?: FenceType;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus, default: FenceStatus.ACTIVE })
   @IsOptional()
   @IsEnum(FenceStatus)
   status?: FenceStatus;
+
+  @ApiPropertyOptional({ description: '是否启用 - 别名', example: true })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 
   @ApiPropertyOptional({ description: '多边形坐标点数组（多边形围栏必填）', type: [CoordinateDto] })
   @ValidateIf((o) => !o.radius || o.radius <= 0)
@@ -48,6 +59,11 @@ export class CreateFenceDto {
   @IsOptional()
   @IsNumber()
   radius?: number;
+
+  @ApiPropertyOptional({ description: '中心点坐标 [纬度, 经度] - 别名', example: [39.908, 116.397] })
+  @IsOptional()
+  @IsArray()
+  center?: number[];
 
   @ApiPropertyOptional({ description: '地址', example: '北京市东城区xxx街道' })
   @IsOptional()
@@ -80,6 +96,11 @@ export class CreateFenceDto {
   @IsString()
   remark?: string;
 
+  @ApiPropertyOptional({ description: '描述 - 别名', example: '围栏描述信息' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
   @ApiPropertyOptional({ description: '允许作业开始时间', example: '08:00:00' })
   @IsOptional()
   @Matches(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, { message: '时间格式必须为 HH:mm:ss' })
@@ -102,10 +123,20 @@ export class UpdateFenceDto {
   @IsEnum(FenceType)
   type?: FenceType;
 
+  @ApiPropertyOptional({ description: '围栏类型 - 别名', enum: FenceType })
+  @IsOptional()
+  @IsEnum(FenceType)
+  fenceType?: FenceType;
+
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus })
   @IsOptional()
   @IsEnum(FenceStatus)
   status?: FenceStatus;
+
+  @ApiPropertyOptional({ description: '是否启用 - 别名' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 
   @ApiPropertyOptional({ description: '多边形坐标点数组', type: [CoordinateDto] })
   @IsOptional()
@@ -122,6 +153,11 @@ export class UpdateFenceDto {
   @IsOptional()
   @IsNumber()
   centerLat?: number;
+
+  @ApiPropertyOptional({ description: '中心点坐标 [纬度, 经度] - 别名' })
+  @IsOptional()
+  @IsArray()
+  center?: number[];
 
   @ApiPropertyOptional({ description: '半径(米)' })
   @IsOptional()
@@ -159,6 +195,11 @@ export class UpdateFenceDto {
   @IsString()
   remark?: string;
 
+  @ApiPropertyOptional({ description: '描述 - 别名' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
   @ApiPropertyOptional({ description: '允许作业开始时间' })
   @IsOptional()
   @Matches(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, { message: '时间格式必须为 HH:mm:ss' })
@@ -175,6 +216,11 @@ export class QueryFenceDto {
   @IsOptional()
   @IsEnum(FenceType)
   type?: FenceType;
+
+  @ApiPropertyOptional({ description: '围栏类型 - 别名', enum: FenceType })
+  @IsOptional()
+  @IsEnum(FenceType)
+  fenceType?: FenceType;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus })
   @IsOptional()
@@ -211,6 +257,12 @@ export class CheckPointDto {
 
 export class ToggleStatusDto {
   @ApiProperty({ description: '围栏状态', enum: FenceStatus })
+  @IsOptional()
   @IsEnum(FenceStatus)
-  status: FenceStatus;
+  status?: FenceStatus;
+
+  @ApiPropertyOptional({ description: '是否启用 - 别名' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 }

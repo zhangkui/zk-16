@@ -11,8 +11,32 @@ export class FenceService {
     private readonly fenceRepository: Repository<Fence>,
   ) {}
 
+  private normalizeDto(dto: any): any {
+    const normalized = { ...dto };
+
+    if (normalized.fenceType && !normalized.type) {
+      normalized.type = normalized.fenceType;
+    }
+
+    if (normalized.enabled !== undefined && !normalized.status) {
+      normalized.status = normalized.enabled ? FenceStatus.ACTIVE : FenceStatus.INACTIVE;
+    }
+
+    if (normalized.center && Array.isArray(normalized.center) && normalized.center.length >= 2) {
+      if (!normalized.centerLat) normalized.centerLat = normalized.center[0];
+      if (!normalized.centerLng) normalized.centerLng = normalized.center[1];
+    }
+
+    if (normalized.description && !normalized.remark) {
+      normalized.remark = normalized.description;
+    }
+
+    return normalized;
+  }
+
   async create(createFenceDto: CreateFenceDto): Promise<Fence> {
-    const { coordinates, centerLng, centerLat, radius } = createFenceDto;
+    const dto = this.normalizeDto(createFenceDto);
+    const { coordinates, centerLng, centerLat, radius } = dto;
 
     let geomExpression: string;
     let finalCenterLng: number;
@@ -42,7 +66,7 @@ export class FenceService {
     }
 
     const fence = this.fenceRepository.create({
-      ...createFenceDto,
+      ...dto,
       centerLng: finalCenterLng,
       centerLat: finalCenterLat,
       radius: finalRadius,
@@ -53,7 +77,8 @@ export class FenceService {
   }
 
   async findAll(queryFenceDto: QueryFenceDto): Promise<{ data: Fence[]; total: number; page: number; pageSize: number }> {
-    const { type, status, district, page = 1, pageSize = 20 } = queryFenceDto;
+    const dto = this.normalizeDto(queryFenceDto);
+    const { type, status, district, page = 1, pageSize = 20 } = dto;
 
     const queryBuilder = this.fenceRepository.createQueryBuilder('fence');
 
@@ -127,10 +152,11 @@ export class FenceService {
   }
 
   async update(id: string, updateFenceDto: UpdateFenceDto): Promise<Fence> {
+    const dto = this.normalizeDto(updateFenceDto);
     const fence = await this.findOne(id);
-    const { coordinates, centerLng, centerLat, radius } = updateFenceDto;
+    const { coordinates, centerLng, centerLat, radius } = dto;
 
-    const updateData: Partial<Fence> & { geom?: any } = { ...updateFenceDto };
+    const updateData: Partial<Fence> & { geom?: any } = { ...dto };
 
     if (radius !== undefined || centerLng !== undefined || centerLat !== undefined) {
       const finalRadius = radius ?? fence.radius;

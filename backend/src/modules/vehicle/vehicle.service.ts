@@ -17,24 +17,40 @@ export class VehicleService {
     private readonly vehicleRepository: Repository<Vehicle>,
   ) {}
 
+  private normalizeDto(dto: any): any {
+    const normalized = { ...dto };
+    if (normalized.company && !normalized.companyName) {
+      normalized.companyName = normalized.company;
+    }
+    if (normalized.capacity && !normalized.loadCapacity) {
+      normalized.loadCapacity = normalized.capacity;
+    }
+    if (normalized.remark && !normalized.auditRemark) {
+      normalized.auditRemark = normalized.remark;
+    }
+    return normalized;
+  }
+
   async create(createVehicleDto: CreateVehicleDto): Promise<Vehicle> {
+    const dto = this.normalizeDto(createVehicleDto);
     const existing = await this.vehicleRepository.findOne({
-      where: { plateNumber: createVehicleDto.plateNumber },
+      where: { plateNumber: dto.plateNumber },
     });
     if (existing) {
-      throw new ConflictException(`车牌号 ${createVehicleDto.plateNumber} 已存在`);
+      throw new ConflictException(`车牌号 ${dto.plateNumber} 已存在`);
     }
 
     const vehicle = this.vehicleRepository.create({
-      ...createVehicleDto,
+      ...dto,
       status: VehicleStatus.PENDING,
-    });
+    } as Partial<Vehicle>);
 
-    return this.vehicleRepository.save(vehicle);
+    return this.vehicleRepository.save(vehicle as Vehicle);
   }
 
   async findAll(queryVehicleDto: QueryVehicleDto): Promise<{ data: Vehicle[]; total: number; page: number; pageSize: number }> {
-    const { plateNumber, status, companyName, page = 1, pageSize = 10 } = queryVehicleDto;
+    const dto = this.normalizeDto(queryVehicleDto);
+    const { plateNumber, status, companyName, page = 1, pageSize = 10 } = dto;
 
     const queryBuilder = this.vehicleRepository.createQueryBuilder('vehicle');
 
@@ -128,6 +144,7 @@ export class VehicleService {
   }
 
   async approve(id: string, approveVehicleDto: ApproveVehicleDto): Promise<Vehicle> {
+    const dto = this.normalizeDto(approveVehicleDto);
     const vehicle = await this.findOne(id);
 
     if (vehicle.status === VehicleStatus.APPROVED) {
@@ -135,14 +152,15 @@ export class VehicleService {
     }
 
     vehicle.status = VehicleStatus.APPROVED;
-    vehicle.auditRemark = approveVehicleDto.auditRemark;
-    vehicle.auditor = approveVehicleDto.auditor;
+    vehicle.auditRemark = dto.auditRemark;
+    vehicle.auditor = dto.auditor;
     vehicle.auditTime = new Date();
 
     return this.vehicleRepository.save(vehicle);
   }
 
   async reject(id: string, rejectVehicleDto: RejectVehicleDto): Promise<Vehicle> {
+    const dto = this.normalizeDto(rejectVehicleDto);
     const vehicle = await this.findOne(id);
 
     if (vehicle.status === VehicleStatus.REJECTED) {
@@ -150,26 +168,27 @@ export class VehicleService {
     }
 
     vehicle.status = VehicleStatus.REJECTED;
-    vehicle.auditRemark = rejectVehicleDto.auditRemark;
-    vehicle.auditor = rejectVehicleDto.auditor;
+    vehicle.auditRemark = dto.auditRemark;
+    vehicle.auditor = dto.auditor;
     vehicle.auditTime = new Date();
 
     return this.vehicleRepository.save(vehicle);
   }
 
   async update(id: string, updateVehicleDto: UpdateVehicleDto): Promise<Vehicle> {
+    const dto = this.normalizeDto(updateVehicleDto);
     const vehicle = await this.findOne(id);
 
-    if (updateVehicleDto.plateNumber && updateVehicleDto.plateNumber !== vehicle.plateNumber) {
+    if (dto.plateNumber && dto.plateNumber !== vehicle.plateNumber) {
       const existing = await this.vehicleRepository.findOne({
-        where: { plateNumber: updateVehicleDto.plateNumber },
+        where: { plateNumber: dto.plateNumber },
       });
       if (existing) {
-        throw new ConflictException(`车牌号 ${updateVehicleDto.plateNumber} 已存在`);
+        throw new ConflictException(`车牌号 ${dto.plateNumber} 已存在`);
       }
     }
 
-    Object.assign(vehicle, updateVehicleDto);
+    Object.assign(vehicle, dto);
 
     return this.vehicleRepository.save(vehicle);
   }
