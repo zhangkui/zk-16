@@ -27,15 +27,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (username: string, password: string) => {
     const res = await authApi.login({ username, password });
-    const { token, user } = res.data;
+    const { accessToken, user } = res.data;
     
-    setCookie(null, 'token', token, {
+    setCookie(null, 'token', accessToken, {
       maxAge: 7 * 24 * 60 * 60,
       path: '/',
     });
 
     set({
-      token,
+      token: accessToken,
       user,
       isAuthenticated: true,
     });

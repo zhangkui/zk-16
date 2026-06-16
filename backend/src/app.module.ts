@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CacheModule } from '@nestjs/cache-manager';
+import { APP_GUARD } from '@nestjs/core';
 import { redisStore } from 'cache-manager-redis-yet';
 import { VehicleModule } from './modules/vehicle/vehicle.module';
 import { FenceModule } from './modules/fence/fence.module';
@@ -14,6 +15,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { DisposalReceiptModule } from './modules/disposal-receipt/disposal-receipt.module';
 import { KafkaModule } from './kafka/kafka.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -63,6 +65,12 @@ import { AuthModule } from './modules/auth/auth.module';
     EvidenceModule,
     AuditModule,
     DisposalReceiptModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
   ],
 })
 export class AppModule {}

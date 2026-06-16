@@ -29,6 +29,7 @@ import {
 } from './auth.dto';
 import { User, UserRole, UserStatus } from './user.entity';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { Public } from './public.decorator';
 
 @ApiTags('认证管理')
 @Controller('auth')
@@ -36,6 +37,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @Public()
   @ApiOperation({ summary: '用户登录' })
   @ApiResponse({ status: 200, description: '登录成功', type: LoginResponseDto })
   @HttpCode(HttpStatus.OK)
@@ -44,6 +46,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @Public()
   @ApiOperation({ summary: '用户注册' })
   @ApiResponse({ status: 201, description: '注册成功', type: User })
   async register(@Body() registerDto: RegisterDto): Promise<User> {
