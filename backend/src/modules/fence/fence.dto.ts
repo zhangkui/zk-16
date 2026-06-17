@@ -1,10 +1,9 @@
-import { IsString, IsEnum, IsOptional, IsNumber, IsArray, IsNotEmpty, ArrayMinSize, ValidateIf, Matches, IsPhoneNumber, IsBoolean, IsIn } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsNumber, IsArray, IsNotEmpty, ArrayMinSize, Matches, IsPhoneNumber, IsBoolean, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { FenceType, FenceStatus } from './fence.entity';
 
 const FENCE_TYPE_VALUES = ['loading', 'unloading', 'restricted', 'permit', 'forbidden', 'storage'];
-const SHAPE_TYPE_VALUES = ['polygon', 'circle'];
 
 export class CoordinateDto {
   @ApiProperty({ description: '经度', example: 116.397 })
@@ -22,20 +21,10 @@ export class CreateFenceDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: '围栏形状类型', enum: SHAPE_TYPE_VALUES, example: 'polygon' })
-  @IsOptional()
-  @IsIn(SHAPE_TYPE_VALUES)
-  type?: string;
-
   @ApiProperty({ description: '围栏类型', enum: FENCE_TYPE_VALUES, example: 'loading' })
   @IsOptional()
   @IsIn(FENCE_TYPE_VALUES)
   fenceType?: string;
-
-  @ApiPropertyOptional({ description: '围栏形状类型 - 别名', enum: SHAPE_TYPE_VALUES })
-  @IsOptional()
-  @IsIn(SHAPE_TYPE_VALUES)
-  shapeType?: string;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus, default: FenceStatus.ACTIVE })
   @IsOptional()
@@ -47,31 +36,11 @@ export class CreateFenceDto {
   @IsBoolean()
   enabled?: boolean;
 
-  @ApiPropertyOptional({ description: '多边形坐标点数组（多边形围栏必填）', type: [CoordinateDto] })
-  @ValidateIf((o) => !o.radius || o.radius <= 0)
+  @ApiPropertyOptional({ description: '多边形坐标点数组', type: [CoordinateDto] })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(3, { message: '多边形围栏至少需要3个坐标点' })
+  @ArrayMinSize(3, { message: '围栏至少需要3个坐标点' })
   coordinates?: CoordinateDto[];
-
-  @ApiPropertyOptional({ description: '中心点经度（圆形围栏必填）', example: 116.397 })
-  @ValidateIf((o) => o.radius && o.radius > 0)
-  @IsNumber()
-  centerLng?: number;
-
-  @ApiPropertyOptional({ description: '中心点纬度（圆形围栏必填）', example: 39.908 })
-  @ValidateIf((o) => o.radius && o.radius > 0)
-  @IsNumber()
-  centerLat?: number;
-
-  @ApiPropertyOptional({ description: '半径(米)，大于0表示圆形围栏', example: 500 })
-  @IsOptional()
-  @IsNumber()
-  radius?: number;
-
-  @ApiPropertyOptional({ description: '中心点坐标 [纬度, 经度] - 别名', example: [39.908, 116.397] })
-  @IsOptional()
-  @IsArray()
-  center?: number[];
 
   @ApiPropertyOptional({ description: '地址', example: '北京市东城区xxx街道' })
   @IsOptional()
@@ -126,20 +95,10 @@ export class UpdateFenceDto {
   @IsString()
   name?: string;
 
-  @ApiPropertyOptional({ description: '围栏形状类型', enum: SHAPE_TYPE_VALUES })
-  @IsOptional()
-  @IsIn(SHAPE_TYPE_VALUES)
-  type?: string;
-
   @ApiPropertyOptional({ description: '围栏类型', enum: FENCE_TYPE_VALUES })
   @IsOptional()
   @IsIn(FENCE_TYPE_VALUES)
   fenceType?: string;
-
-  @ApiPropertyOptional({ description: '围栏形状类型 - 别名', enum: SHAPE_TYPE_VALUES })
-  @IsOptional()
-  @IsIn(SHAPE_TYPE_VALUES)
-  shapeType?: string;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus })
   @IsOptional()
@@ -154,28 +113,8 @@ export class UpdateFenceDto {
   @ApiPropertyOptional({ description: '多边形坐标点数组', type: [CoordinateDto] })
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(3, { message: '多边形围栏至少需要3个坐标点' })
+  @ArrayMinSize(3, { message: '围栏至少需要3个坐标点' })
   coordinates?: CoordinateDto[];
-
-  @ApiPropertyOptional({ description: '中心点经度' })
-  @IsOptional()
-  @IsNumber()
-  centerLng?: number;
-
-  @ApiPropertyOptional({ description: '中心点纬度' })
-  @IsOptional()
-  @IsNumber()
-  centerLat?: number;
-
-  @ApiPropertyOptional({ description: '中心点坐标 [纬度, 经度] - 别名' })
-  @IsOptional()
-  @IsArray()
-  center?: number[];
-
-  @ApiPropertyOptional({ description: '半径(米)' })
-  @IsOptional()
-  @IsNumber()
-  radius?: number;
 
   @ApiPropertyOptional({ description: '地址' })
   @IsOptional()
@@ -224,21 +163,18 @@ export class UpdateFenceDto {
   workEndTime?: string;
 }
 
-export class QueryFenceDto {
-  @ApiPropertyOptional({ description: '围栏形状类型', enum: SHAPE_TYPE_VALUES })
-  @IsOptional()
-  @IsIn(SHAPE_TYPE_VALUES)
-  type?: string;
+export class UpdateFenceCoordinatesDto {
+  @ApiProperty({ description: '多边形坐标点数组', type: [CoordinateDto] })
+  @IsArray()
+  @ArrayMinSize(3, { message: '围栏至少需要3个坐标点' })
+  coordinates: CoordinateDto[];
+}
 
+export class QueryFenceDto {
   @ApiPropertyOptional({ description: '围栏类型', enum: FENCE_TYPE_VALUES })
   @IsOptional()
   @IsIn(FENCE_TYPE_VALUES)
   fenceType?: string;
-
-  @ApiPropertyOptional({ description: '围栏形状类型 - 别名', enum: SHAPE_TYPE_VALUES })
-  @IsOptional()
-  @IsIn(SHAPE_TYPE_VALUES)
-  shapeType?: string;
 
   @ApiPropertyOptional({ description: '围栏状态', enum: FenceStatus })
   @IsOptional()

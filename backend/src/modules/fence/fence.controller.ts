@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
 import { FenceService } from './fence.service';
-import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto, ToggleStatusDto } from './fence.dto';
+import { CreateFenceDto, UpdateFenceDto, UpdateFenceCoordinatesDto, QueryFenceDto, CheckPointDto, ToggleStatusDto } from './fence.dto';
 import { Fence, FenceType } from './fence.entity';
 
 @ApiTags('电子围栏管理')
@@ -10,7 +10,7 @@ export class FenceController {
   constructor(private readonly fenceService: FenceService) {}
 
   @Post()
-  @ApiOperation({ summary: '创建电子围栏' })
+  @ApiOperation({ summary: '创建电子围栏（基础信息）' })
   @ApiBody({ type: CreateFenceDto })
   @ApiResponse({ status: 201, description: '围栏创建成功', type: Fence })
   @ApiResponse({ status: 400, description: '请求参数错误' })
@@ -64,13 +64,27 @@ export class FenceController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: '更新围栏信息' })
+  @ApiOperation({ summary: '更新围栏基础信息' })
   @ApiParam({ name: 'id', description: '围栏ID' })
   @ApiBody({ type: UpdateFenceDto })
   @ApiResponse({ status: 200, description: '更新成功', type: Fence })
   @ApiResponse({ status: 404, description: '围栏不存在' })
   update(@Param('id') id: string, @Body() updateFenceDto: UpdateFenceDto): Promise<Fence> {
     return this.fenceService.update(id, updateFenceDto);
+  }
+
+  @Patch(':id/coordinates')
+  @ApiOperation({ summary: '更新围栏坐标点（地图范围）' })
+  @ApiParam({ name: 'id', description: '围栏ID' })
+  @ApiBody({ type: UpdateFenceCoordinatesDto })
+  @ApiResponse({ status: 200, description: '坐标更新成功', type: Fence })
+  @ApiResponse({ status: 400, description: '坐标点数量不足' })
+  @ApiResponse({ status: 404, description: '围栏不存在' })
+  updateCoordinates(
+    @Param('id') id: string,
+    @Body() updateCoordinatesDto: UpdateFenceCoordinatesDto,
+  ): Promise<Fence> {
+    return this.fenceService.updateCoordinates(id, updateCoordinatesDto);
   }
 
   @Patch(':id/toggle-status')

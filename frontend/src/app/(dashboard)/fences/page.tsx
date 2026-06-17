@@ -14,12 +14,11 @@ import {
   Row,
   Col,
   List,
-  InputNumber,
   AutoComplete,
   Tooltip,
   Card,
   Drawer,
-  Radio,
+  Steps,
 } from 'antd';
 import {
   PlusOutlined,
@@ -28,24 +27,22 @@ import {
   SearchOutlined,
   PlayCircleOutlined,
   PauseCircleOutlined,
-  ReloadOutlined,
   UndoOutlined,
+  ReloadOutlined,
   CheckOutlined,
   CloseOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { fenceApi, simulationApi } from '@/services/api';
 
 const { Option } = Select;
+const { Step } = Steps;
 
 interface Fence {
   id: string;
   name: string;
-  type: 'polygon' | 'circle';
   fenceType: string;
-  coordinates?: { lng: number; lat: number }[];
-  radius?: number;
-  centerLng?: number;
-  centerLat?: number;
+  coordinates?: { lng: number; lat: number }[] | null;
   status?: string;
   enabled?: boolean;
   remark?: string;
@@ -96,21 +93,18 @@ export default function FencesPage() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'add' | 'edit'>('add');
   const [editingFence, setEditingFence] = useState<Fence | null>(null);
+  const [currentStep, setCurrentStep] = useState(0);
 
-  const [shapeType, setShapeType] = useState<'polygon' | 'circle'>('polygon');
   const [polygonPoints, setPolygonPoints] = useState<{ lng: number; lat: number }[]>([]);
-  const [circleCenter, setCircleCenter] = useState<{ lng: number; lat: number }>({ lng: 116.4074, lat: 39.9042 });
-  const [circleRadius, setCircleRadius] = useState(500);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searchOptions, setSearchOptions] = useState<SearchResult[]>([]);
-  const [isDrawing, setIsDrawing] = useState(false);
   const [simulationRunning, setSimulationRunning] = useState(false);
 
   const mapRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tempPolygonRef = useRef<any>(null);
-  const tempCircleRef = useRef<any>(null);
   const tempMarkersRef = useRef<any[]>([]);
   const fenceOverlaysRef = useRef<Map<string, any>>(new Map());
   const placeSearchRef = useRef<any>(null);
@@ -174,7 +168,7 @@ export default function FencesPage() {
         });
 
         map.on('click', (e: any) => {
-          if (isDrawing && shapeType === 'polygon') {
+          if (isDrawing) {
             const newPoint = { lng: e.lnglat.getLng(), lat: e.lnglat.getLat() };
             const newPoints = [...polygonPoints, newPoint];
             setPolygonPoints(newPoints);
@@ -198,7 +192,7 @@ export default function FencesPage() {
         mapRef.current = null;
       }
     };
-  }, [fetchSimulationStatus]);
+  }, [fetchSimulationStatus, isDrawing, polygonPoints]);
 
   useEffect(() => {
     if (mapRef.current && fences.length > 0) {
@@ -207,12 +201,10 @@ export default function FencesPage() {
   }, [fences]);
 
   useEffect(() => {
-    if (isDrawing && shapeType === 'circle' && mapRef.current) {
-      mapRef.current.setDefaultCursor('crosshair');
-    } else if (mapRef.current) {
-      mapRef.current.setDefaultCursor('default');
+    if (mapRef.current) {
+      mapRef.current.setDefaultCursor(isDrawing ? 'crosshair' : 'default');
     }
-  }, [isDrawing, shapeType]);
+  }, [isDrawing]);
 
   const fetchFences = async () => {
     setLoading(true);
@@ -222,7 +214,6 @@ export default function FencesPage() {
       const normalizedFences = fenceList.map((f: any) => ({
         ...f,
         fenceType: f.fenceType || f.type,
-        type: f.radius > 0 ? 'circle' : 'polygon',
         enabled: f.status === 'active' || f.enabled,
       }));
       setFences(normalizedFences);
@@ -245,7 +236,7 @@ export default function FencesPage() {
     fences.forEach((fence) => {
       const color = fenceColorMap[fence.fenceType] || '#1677ff';
       
-      if (fence.type === 'polygon' && fence.coordinates && fence.coordinates.length >= 3) {
+      if (fence.coordinates && fence.coordinates.length >= 3) {
         const path = fence.coordinates.map((p) => [p.lng, p.lat]);
         const polygon = new window.AMap.Polygon({
           path,
@@ -259,20 +250,6 @@ export default function FencesPage() {
         polygon.setMap(mapRef.current);
         polygon.on('click', () => setSelectedFence(fence));
         fenceOverlaysRef.current.set(fence.id, polygon);
-      } else if (fence.type === 'circle' && fence.centerLng && fence.centerLat) {
-        const circle = new window.AMap.Circle({
-          center: [fence.centerLng, fence.centerLat],
-          radius: fence.radius || 500,
-          strokeColor: color,
-          strokeWeight: 2,
-          fillColor: color,
-          fillOpacity: 0.25,
-          cursor: 'pointer',
-          extData: fence,
-        });
-        circle.setMap(mapRef.current);
-        circle.on('click', () => setSelectedFence(fence));
-        fenceOverlaysRef.current.set(fence.id, circle);
       }
     });
   };
@@ -283,10 +260,6 @@ export default function FencesPage() {
     if (tempPolygonRef.current) {
       mapRef.current.remove(tempPolygonRef.current);
       tempPolygonRef.current = null;
-    }
-    if (tempCircleRef.current) {
-      mapRef.current.remove(tempCircleRef.current);
-      tempCircleRef.current = null;
     }
     tempMarkersRef.current.forEach((m) => m.setMap(null));
     tempMarkersRef.current = [];
@@ -330,30 +303,6 @@ export default function FencesPage() {
     });
   };
 
-  const updateTempCircle = (center: { lng: number; lat: number }, radius: number) => {
-    if (!mapRef.current) return;
-
-    clearTempOverlays();
-
-    tempCircleRef.current = new window.AMap.Circle({
-      center: [center.lng, center.lat],
-      radius,
-      strokeColor: '#1677ff',
-      strokeWeight: 2,
-      fillColor: '#1677ff',
-      fillOpacity: 0.3,
-    });
-    tempCircleRef.current.setMap(mapRef.current);
-
-    const marker = new window.AMap.Marker({
-      position: [center.lng, center.lat],
-      offset: new window.AMap.Pixel(-8, -8),
-      content: `<div style="width:16px;height:16px;background:#1677ff;border:2px solid #fff;border-radius:50%;"></div>`,
-    });
-    marker.setMap(mapRef.current);
-    tempMarkersRef.current.push(marker);
-  };
-
   const handleSearch = (keyword: string) => {
     setSearchKeyword(keyword);
     if (!keyword || !placeSearchRef.current) {
@@ -391,11 +340,9 @@ export default function FencesPage() {
     setEditingFence(null);
     form.resetFields();
     setPolygonPoints([]);
-    setCircleCenter({ lng: 116.4074, lat: 39.9042 });
-    setCircleRadius(500);
-    setShapeType('polygon');
     setIsDrawing(false);
     clearTempOverlays();
+    setCurrentStep(0);
     setDrawerVisible(true);
   };
 
@@ -407,20 +354,30 @@ export default function FencesPage() {
       fenceType: record.fenceType,
       description: record.remark || record.description || '',
     });
-    setShapeType(record.type);
+    setPolygonPoints([]);
+    setIsDrawing(false);
+    clearTempOverlays();
+    setCurrentStep(0);
+    setDrawerVisible(true);
+  };
+
+  const handleSetScope = (record: Fence) => {
+    setDrawerVisible(false);
+    setEditingFence(record);
+    setPolygonPoints(record.coordinates ? [...record.coordinates] : []);
+    setIsDrawing(true);
     
-    if (record.type === 'polygon' && record.coordinates) {
-      setPolygonPoints(record.coordinates);
+    if (record.coordinates && record.coordinates.length > 0 && mapRef.current) {
       updateTempPolygon(record.coordinates);
-    } else {
-      const center = { lng: record.centerLng || 116.4074, lat: record.centerLat || 39.9042 };
-      setCircleCenter(center);
-      setCircleRadius(record.radius || 500);
-      updateTempCircle(center, record.radius || 500);
+      const lats = record.coordinates.map((p) => p.lat);
+      const lngs = record.coordinates.map((p) => p.lng);
+      const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+      const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      mapRef.current.setCenter([centerLng, centerLat]);
+      mapRef.current.setZoom(14);
     }
     
-    setIsDrawing(false);
-    setDrawerVisible(true);
+    message.info('请在地图上点击添加顶点，绘制围栏范围');
   };
 
   const handleDelete = async (id: string) => {
@@ -446,94 +403,107 @@ export default function FencesPage() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSaveBaseInfo = async () => {
     try {
       const values = await form.validateFields();
-      
-      let fenceData: any = {
+      const fenceData: any = {
         ...values,
-        type: shapeType,
       };
 
-      if (shapeType === 'polygon') {
-        if (polygonPoints.length < 3) {
-          message.error('多边形围栏至少需要3个顶点');
-          return;
-        }
-        fenceData.coordinates = polygonPoints;
-      } else {
-        fenceData.centerLng = circleCenter.lng;
-        fenceData.centerLat = circleCenter.lat;
-        fenceData.radius = circleRadius;
-      }
+      let savedFence: any;
 
       if (editingFence) {
         await fenceApi.update(editingFence.id, fenceData);
-        message.success('更新成功');
+        const res: any = await fenceApi.get(editingFence.id);
+        savedFence = res.data?.data || res.data;
+        message.success('基础信息更新成功');
       } else {
-        await fenceApi.create(fenceData);
-        message.success('创建成功');
+        const res: any = await fenceApi.create(fenceData);
+        savedFence = res.data?.data || res.data;
+        message.success('基础信息保存成功');
       }
 
+      setEditingFence(savedFence);
+      setCurrentStep(1);
       setDrawerVisible(false);
-      setIsDrawing(false);
-      clearTempOverlays();
-      fetchFences();
+      setIsDrawing(true);
+      
+      const existingCoords = savedFence.coordinates || savedFence.geometry?.coordinates?.[0]?.map(
+        (c: number[]) => ({ lng: c[0], lat: c[1] })
+      ) || [];
+      
+      if (existingCoords && existingCoords.length >= 3) {
+        setPolygonPoints(existingCoords);
+        updateTempPolygon(existingCoords);
+        const lats = existingCoords.map((p: { lat: number }) => p.lat);
+        const lngs = existingCoords.map((p: { lng: number }) => p.lng);
+        const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+        if (mapRef.current) {
+          mapRef.current.setCenter([centerLng, centerLat]);
+          mapRef.current.setZoom(14);
+        }
+        message.info('围栏范围已加载，可在地图上调整');
+      } else {
+        setPolygonPoints([]);
+        clearTempOverlays();
+        message.info('请在地图上点击添加顶点，绘制围栏范围');
+      }
     } catch (error: any) {
       if (error.errorFields) return;
       message.error(editingFence ? '更新失败' : '创建失败');
     }
   };
 
+  const handleSaveCoordinates = async () => {
+    if (!editingFence) {
+      message.error('请先保存基础信息');
+      return;
+    }
+
+    if (polygonPoints.length < 3) {
+      message.error('围栏至少需要3个顶点');
+      return;
+    }
+
+    try {
+      await fenceApi.updateCoordinates(editingFence.id, {
+        coordinates: polygonPoints,
+      });
+      message.success('围栏范围保存成功');
+      
+      setIsDrawing(false);
+      clearTempOverlays();
+      fetchFences();
+      setEditingFence(null);
+      setPolygonPoints([]);
+      setCurrentStep(0);
+    } catch (error) {
+      message.error('保存围栏范围失败');
+    }
+  };
+
+  const handleCancelDrawing = () => {
+    setIsDrawing(false);
+    clearTempOverlays();
+    setPolygonPoints([]);
+    setEditingFence(null);
+    setCurrentStep(0);
+  };
+
   const toggleDrawing = () => {
     if (isDrawing) {
       setIsDrawing(false);
     } else {
-      if (shapeType === 'polygon') {
-        setIsDrawing(true);
-        setPolygonPoints([]);
-        clearTempOverlays();
-        message.info('请在地图上点击添加顶点，至少3个点');
-      } else {
-        setIsDrawing(true);
-        message.info('请在地图上点击设置圆心位置');
-      }
+      setIsDrawing(true);
+      setPolygonPoints([]);
+      clearTempOverlays();
+      message.info('请在地图上点击添加顶点，至少3个点');
     }
   };
-
-  const handleMapClickForCircle = (e: any) => {
-    if (isDrawing && shapeType === 'circle') {
-      const center = { lng: e.lnglat.getLng(), lat: e.lnglat.getLat() };
-      setCircleCenter(center);
-      updateTempCircle(center, circleRadius);
-      setIsDrawing(false);
-      message.success('圆心位置已设置，可在右侧调整半径');
-    }
-  };
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    
-    const handler = (e: any) => handleMapClickForCircle(e);
-    
-    if (isDrawing && shapeType === 'circle') {
-      mapRef.current.on('click', handler);
-    }
-    
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.off('click', handler);
-      }
-    };
-  }, [isDrawing, shapeType, circleRadius]);
 
   const clearDrawing = () => {
-    if (shapeType === 'polygon') {
-      setPolygonPoints([]);
-    } else {
-      setCircleCenter({ lng: 116.4074, lat: 39.9042 });
-      setCircleRadius(500);
-    }
+    setPolygonPoints([]);
     clearTempOverlays();
   };
 
@@ -563,32 +533,9 @@ export default function FencesPage() {
 
   const handleCloseDrawer = () => {
     setDrawerVisible(false);
-    setIsDrawing(false);
-    clearTempOverlays();
   };
 
-  const handleRadiusChange = (value: number) => {
-    setCircleRadius(value || 500);
-    if (tempCircleRef.current || shapeType === 'circle') {
-      updateTempCircle(circleCenter, value || 500);
-    }
-  };
-
-  const handleCenterLngChange = (value: number) => {
-    const newCenter = { ...circleCenter, lng: value || 0 };
-    setCircleCenter(newCenter);
-    if (shapeType === 'circle') {
-      updateTempCircle(newCenter, circleRadius);
-    }
-  };
-
-  const handleCenterLatChange = (value: number) => {
-    const newCenter = { ...circleCenter, lat: value || 0 };
-    setCircleCenter(newCenter);
-    if (shapeType === 'circle') {
-      updateTempCircle(newCenter, circleRadius);
-    }
-  };
+  const hasCoordinates = selectedFence?.coordinates && selectedFence.coordinates.length >= 3;
 
   return (
     <div>
@@ -610,6 +557,47 @@ export default function FencesPage() {
           </Button>
         </Space>
       </div>
+
+      {isDrawing && editingFence && (
+        <Card
+          style={{ marginBottom: 16, borderRadius: 8 }}
+          bodyStyle={{ padding: 12 }}
+          title={
+            <Space>
+              <span>正在设置围栏范围：</span>
+              <Tag color="blue">{editingFence.name}</Tag>
+              <span style={{ color: '#999', fontSize: 13 }}>
+                已添加 <strong style={{ color: '#1677ff' }}>{polygonPoints.length}</strong> 个顶点
+              </span>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button icon={<UndoOutlined />} onClick={undoLastPoint} disabled={polygonPoints.length === 0}>
+                撤销
+              </Button>
+              <Button icon={<ReloadOutlined />} onClick={clearDrawing} disabled={polygonPoints.length === 0}>
+                清除
+              </Button>
+              <Button onClick={handleCancelDrawing} icon={<CloseOutlined />}>
+                取消
+              </Button>
+              <Button
+                type="primary"
+                icon={<CheckOutlined />}
+                onClick={handleSaveCoordinates}
+                disabled={polygonPoints.length < 3}
+              >
+                保存范围
+              </Button>
+            </Space>
+          }
+        >
+          <div style={{ color: '#666', fontSize: 13 }}>
+            💡 在左侧地图上点击依次添加顶点，至少需要3个点形成封闭区域
+          </div>
+        </Card>
+      )}
 
       <Row gutter={16}>
         <Col xs={24} lg={14}>
@@ -653,107 +641,119 @@ export default function FencesPage() {
               dataSource={fences}
               loading={loading}
               style={{ maxHeight: 520, overflowY: 'auto' }}
-              renderItem={(fence) => (
-                <List.Item
-                  key={fence.id}
-                  onClick={() => {
-                    setSelectedFence(fence);
-                    if (mapRef.current) {
-                      if (fence.type === 'polygon' && fence.coordinates && fence.coordinates.length > 0) {
-                        const lats = fence.coordinates.map((p) => p.lat);
-                        const lngs = fence.coordinates.map((p) => p.lng);
+              renderItem={(fence) => {
+                const hasCoords = fence.coordinates && fence.coordinates.length >= 3;
+                return (
+                  <List.Item
+                    key={fence.id}
+                    onClick={() => {
+                      setSelectedFence(fence);
+                      if (mapRef.current && hasCoords) {
+                        const lats = fence.coordinates!.map((p) => p.lat);
+                        const lngs = fence.coordinates!.map((p) => p.lng);
                         const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
                         const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
                         mapRef.current.setCenter([centerLng, centerLat]);
-                      } else if (fence.centerLng && fence.centerLat) {
-                        mapRef.current.setCenter([fence.centerLng, fence.centerLat]);
+                        mapRef.current.setZoom(14);
                       }
-                      mapRef.current.setZoom(14);
-                    }
-                  }}
-                  style={{
-                    cursor: 'pointer',
-                    borderRadius: 6,
-                    padding: '10px 12px',
-                    marginBottom: 8,
-                    background: selectedFence?.id === fence.id ? '#e6f4ff' : '#fafafa',
-                    border: selectedFence?.id === fence.id ? '1px solid #91caff' : '1px solid #f0f0f0',
-                  }}
-                >
-                  <List.Item.Meta
-                    title={
-                      <Space wrap>
-                        <span style={{ fontWeight: 500 }}>{fence.name}</span>
-                        <Tag color={fenceTypeMap[fence.fenceType]?.color || 'blue'}>
-                          {fenceTypeMap[fence.fenceType]?.text || '未知'}
-                        </Tag>
-                        <Tag color={fence.enabled ? 'green' : 'default'}>
-                          {fence.enabled ? '启用' : '禁用'}
-                        </Tag>
-                      </Space>
-                    }
-                    description={
-                      <div>
-                        <div style={{ marginBottom: 4 }}>
-                          {fence.type === 'polygon' ? '多边形' : '圆形'}
-                          {fence.type === 'polygon' 
-                            ? ` · ${fence.coordinates?.length || 0}个顶点` 
-                            : ` · 半径${fence.radius}米`}
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      borderRadius: 6,
+                      padding: '10px 12px',
+                      marginBottom: 8,
+                      background: selectedFence?.id === fence.id ? '#e6f4ff' : '#fafafa',
+                      border: selectedFence?.id === fence.id ? '1px solid #91caff' : '1px solid #f0f0f0',
+                    }}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <Space wrap>
+                          <span style={{ fontWeight: 500 }}>{fence.name}</span>
+                          <Tag color={fenceTypeMap[fence.fenceType]?.color || 'blue'}>
+                            {fenceTypeMap[fence.fenceType]?.text || '未知'}
+                          </Tag>
+                          <Tag color={fence.enabled ? 'green' : 'default'}>
+                            {fence.enabled ? '启用' : '禁用'}
+                          </Tag>
+                          {!hasCoords && <Tag color="orange">未设置范围</Tag>}
+                        </Space>
+                      }
+                      description={
+                        <div>
+                          <div style={{ marginBottom: 4 }}>
+                            {hasCoords ? `${fence.coordinates?.length}个顶点` : '尚未设置围栏范围'}
+                          </div>
+                          {fence.address && (
+                            <div style={{ color: '#999', fontSize: 12 }}>{fence.address}</div>
+                          )}
                         </div>
-                        {fence.address && (
-                          <div style={{ color: '#999', fontSize: 12 }}>{fence.address}</div>
-                        )}
-                      </div>
-                    }
-                  />
-                  <Space size="small">
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(fence);
-                      }}
-                    >
-                      编辑
-                    </Button>
-                    <Popconfirm
-                      title="确定删除该围栏吗？"
-                      onConfirm={(e) => {
-                        e?.stopPropagation();
-                        handleDelete(fence.id);
-                      }}
-                    >
-                      <Button
-                        type="link"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        删除
-                      </Button>
-                    </Popconfirm>
-                    <Switch
-                      size="small"
-                      checked={fence.enabled}
-                      onChange={(checked, e) => {
-                        e.stopPropagation();
-                        handleToggleStatus(fence);
-                      }}
+                      }
                     />
-                  </Space>
-                </List.Item>
-              )}
+                    <Space size="small" direction="vertical" align="end">
+                      <Space size="small">
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<SettingOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSetScope(fence);
+                          }}
+                        >
+                          设置范围
+                        </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(fence);
+                          }}
+                        >
+                          编辑
+                        </Button>
+                      </Space>
+                      <Space size="small">
+                        <Popconfirm
+                          title="确定删除该围栏吗？"
+                          onConfirm={(e) => {
+                            e?.stopPropagation();
+                            handleDelete(fence.id);
+                          }}
+                        >
+                          <Button
+                            type="link"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            删除
+                          </Button>
+                        </Popconfirm>
+                        <Switch
+                          size="small"
+                          checked={fence.enabled}
+                          onChange={(checked, e) => {
+                            e.stopPropagation();
+                            handleToggleStatus(fence);
+                          }}
+                        />
+                      </Space>
+                    </Space>
+                  </List.Item>
+                );
+              }}
             />
           </Card>
         </Col>
       </Row>
 
       <Drawer
-        title={drawerMode === 'add' ? '新增围栏' : '编辑围栏'}
-        width={520}
+        title={drawerMode === 'add' ? '新增围栏 - 基础信息' : '编辑围栏 - 基础信息'}
+        width={480}
         open={drawerVisible}
         onClose={handleCloseDrawer}
         mask={false}
@@ -763,13 +763,18 @@ export default function FencesPage() {
           <div style={{ textAlign: 'right' }}>
             <Space>
               <Button onClick={handleCloseDrawer}>取消</Button>
-              <Button type="primary" icon={<CheckOutlined />} onClick={handleSubmit}>
-                保存
+              <Button type="primary" icon={<CheckOutlined />} onClick={handleSaveBaseInfo}>
+                下一步：设置范围
               </Button>
             </Space>
           </div>
         }
       >
+        <Steps current={currentStep} size="small" style={{ marginBottom: 24 }}>
+          <Step title="基础信息" />
+          <Step title="设置范围" />
+        </Steps>
+
         <Form form={form} layout="vertical">
           <Form.Item
             name="name"
@@ -793,109 +798,22 @@ export default function FencesPage() {
             </Select>
           </Form.Item>
 
-          <Form.Item label="围栏形状">
-            <Radio.Group
-              value={shapeType}
-              onChange={(e) => {
-                setShapeType(e.target.value);
-                setIsDrawing(false);
-                clearTempOverlays();
-                if (e.target.value === 'circle') {
-                  setPolygonPoints([]);
-                }
-              }}
-            >
-              <Radio value="polygon">多边形</Radio>
-              <Radio value="circle">圆形</Radio>
-            </Radio.Group>
-          </Form.Item>
-
-          {shapeType === 'polygon' ? (
-            <div>
-              <Form.Item label="绘制多边形">
-                <Space wrap>
-                  <Button
-                    type={isDrawing ? 'primary' : 'default'}
-                    icon={isDrawing ? <CloseOutlined /> : <PlusOutlined />}
-                    onClick={toggleDrawing}
-                  >
-                    {isDrawing ? '取消绘制' : '开始绘制'}
-                  </Button>
-                  <Button
-                    icon={<UndoOutlined />}
-                    onClick={undoLastPoint}
-                    disabled={polygonPoints.length === 0}
-                  >
-                    撤销
-                  </Button>
-                  <Button
-                    icon={<ReloadOutlined />}
-                    onClick={clearDrawing}
-                    disabled={polygonPoints.length === 0}
-                  >
-                    清除
-                  </Button>
-                  <span style={{ color: '#999' }}>
-                    已添加 <strong>{polygonPoints.length}</strong> 个顶点
-                  </span>
-                </Space>
-              </Form.Item>
-              <div style={{ color: '#999', fontSize: 13, marginBottom: 16, padding: '8px 12px', background: '#f5f5f5', borderRadius: 4 }}>
-                点击"开始绘制"后，在左侧地图上依次点击添加顶点，至少需要3个点
-              </div>
-            </div>
-          ) : (
-            <div>
-              <Form.Item label="设置圆形">
-                <Button
-                  type={isDrawing ? 'primary' : 'default'}
-                  icon={isDrawing ? <CloseOutlined /> : <PlusOutlined />}
-                  onClick={toggleDrawing}
-                >
-                  {isDrawing ? '取消选点' : '在地图上选圆心'}
-                </Button>
-              </Form.Item>
-              <Row gutter={12}>
-                <Col span={12}>
-                  <Form.Item label="圆心经度">
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      value={circleCenter.lng}
-                      onChange={handleCenterLngChange}
-                      step={0.0001}
-                      precision={6}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item label="圆心纬度">
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      value={circleCenter.lat}
-                      onChange={handleCenterLatChange}
-                      step={0.0001}
-                      precision={6}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-              <Form.Item label="半径 (米)">
-                <InputNumber
-                  style={{ width: '100%' }}
-                  value={circleRadius}
-                  onChange={handleRadiusChange}
-                  min={10}
-                  max={50000}
-                  step={100}
-                  addonAfter="米"
-                />
-              </Form.Item>
-            </div>
-          )}
-
           <Form.Item name="description" label="备注描述">
             <Input.TextArea rows={3} placeholder="请输入围栏备注信息" maxLength={500} />
           </Form.Item>
+
+          <div
+            style={{
+              padding: '12px 16px',
+              background: '#f6ffed',
+              border: '1px solid #b7eb8f',
+              borderRadius: 6,
+              color: '#389e0d',
+              fontSize: 13,
+            }}
+          >
+            💡 保存基础信息后，下一步将在地图上绘制围栏范围
+          </div>
         </Form>
       </Drawer>
     </div>

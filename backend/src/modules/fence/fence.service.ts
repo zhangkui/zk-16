@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw, Brackets } from 'typeorm';
 import { Fence, FenceType, FenceStatus } from './fence.entity';
-import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto } from './fence.dto';
+import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto, UpdateFenceCoordinatesDto } from './fence.dto';
 import { GeoHelper } from '../../common/helpers/geo.helper';
 
 @Injectable()
@@ -16,12 +16,6 @@ export class FenceService {
 
   private normalizeDto(dto: any): any {
     const normalized = { ...dto };
-
-    if (normalized.shapeType && ['polygon', 'circle'].includes(normalized.shapeType)) {
-      (normalized as any)._shapeType = normalized.shapeType;
-    } else if (normalized.type && ['polygon', 'circle'].includes(normalized.type)) {
-      (normalized as any)._shapeType = normalized.type;
-    }
 
     const fenceTypeAliasMap: Record<string, string> = {
       forbidden: FenceType.RESTRICTED,
@@ -38,11 +32,6 @@ export class FenceService {
 
     if (normalized.enabled !== undefined && !normalized.status) {
       normalized.status = normalized.enabled ? FenceStatus.ACTIVE : FenceStatus.INACTIVE;
-    }
-
-    if (normalized.center && Array.isArray(normalized.center) && normalized.center.length >= 2) {
-      if (!normalized.centerLat) normalized.centerLat = normalized.center[0];
-      if (!normalized.centerLng) normalized.centerLng = normalized.center[1];
     }
 
     if (normalized.description && !normalized.remark) {
@@ -88,13 +77,8 @@ export class FenceService {
     }
   }
 
-  private async enrichFenceWithCoordinates(fence: Fence): Promise<Fence & { coordinates?: { lng: number; lat: number }[] }> {
+  private async enrichFenceWithCoordinates(fence: Fence): Promise<Fence & { coordinates?: { lng: number; lat: number }[] | null }> {
     const fenceWithExtra = fence as any;
-
-    if (fence.radius && fence.radius > 0) {
-      fenceWithExtra.coordinates = null;
-      return fenceWithExtra;
-    }
 
     try {
       const result = await this.fenceRepository
@@ -105,9 +89,12 @@ export class FenceService {
 
       if (result?.geojson) {
         fenceWithExtra.coordinates = this.parseGeoJsonCoordinates(result.geojson);
+      } else {
+        fenceWithExtra.coordinates = null;
       }
     } catch (error) {
       this.logger?.error?.('解析围栏坐标失败:', error);
+      fenceWithExtra.coordinates = null;
     }
 
     return fenceWithExtra;
@@ -126,62 +113,39 @@ export class FenceService {
         .where('fence.id IN (:...ids)', { ids })
         .getRawMany();
 
-      const coordMap = new Map<string, { lng: number; lat: number }[]>();
+      const coordMap = new Map<string, { lng: number; lat: number }[] | null>();
       results.forEach((r: any) => {
         const coords = this.parseGeoJsonCoordinates(r.geojson);
-        if (coords) {
-          coordMap.set(r.id, coords);
-        }
+        coordMap.set(r.id, coords || null);
       });
 
       return fences.map((fence) => ({
         ...fence,
-        coordinates: (fence as any).radius > 0 ? null : coordMap.get(fence.id) || null,
+        coordinates: coordMap.get(fence.id) ?? null,
       }));
     } catch (error) {
       this.logger?.error?.('批量解析围栏坐标失败:', error);
-      return fences;
+      return fences.map((fence) => ({ ...fence, coordinates: null }));
     }
   }
 
   async create(createFenceDto: CreateFenceDto): Promise<Fence> {
     const dto = this.normalizeDto(createFenceDto);
-    const { coordinates, centerLng, centerLat, radius } = dto;
+    const { coordinates } = dto;
 
-    let geomValue: any;
-    let finalCenterLng: number;
-    let finalCenterLat: number;
-    let finalRadius: number;
+    const createData: any = { ...dto };
 
-    if (radius && radius > 0) {
-      if (centerLng === undefined || centerLat === undefined) {
-        throw new BadRequestException('圆形围栏必须提供中心点经纬度');
-      }
-      finalCenterLng = centerLng;
-      finalCenterLat = centerLat;
-      finalRadius = radius;
-      geomValue = Raw(
-        () => GeoHelper.makeCircle(centerLng, centerLat, radius),
-      );
-    } else if (coordinates && coordinates.length >= 3) {
-      geomValue = Raw(() => GeoHelper.makePolygon(coordinates));
+    if (coordinates && coordinates.length >= 3) {
+      createData.geom = Raw(() => GeoHelper.makePolygon(coordinates));
 
       const lngs = coordinates.map((c) => c.lng);
       const lats = coordinates.map((c) => c.lat);
-      finalCenterLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-      finalCenterLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-      finalRadius = 0;
-    } else {
-      throw new BadRequestException('必须提供多边形坐标点数组或圆形围栏参数(中心点+半径)');
+      createData.centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      createData.centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+      createData.radius = 0;
     }
 
-    const fence = this.fenceRepository.create({
-      ...dto,
-      centerLng: finalCenterLng,
-      centerLat: finalCenterLat,
-      radius: finalRadius,
-      geom: geomValue,
-    } as any);
+    const fence = this.fenceRepository.create(createData);
 
     return this.fenceRepository.save(fence) as unknown as Fence;
   }
@@ -265,25 +229,9 @@ export class FenceService {
 
   async update(id: string, updateFenceDto: UpdateFenceDto): Promise<Fence> {
     const dto = this.normalizeDto(updateFenceDto);
-    const fence = await this.findOne(id);
-    const { coordinates, centerLng, centerLat, radius } = dto;
+    const { coordinates } = dto;
 
     const updateData: Partial<Fence> & { geom?: any } = { ...dto };
-
-    if (radius !== undefined || centerLng !== undefined || centerLat !== undefined) {
-      const finalRadius = radius ?? fence.radius;
-      const finalCenterLng = centerLng ?? fence.centerLng;
-      const finalCenterLat = centerLat ?? fence.centerLat;
-
-      if (finalRadius > 0) {
-        updateData.geom = Raw(() =>
-          GeoHelper.makeCircle(finalCenterLng, finalCenterLat, finalRadius),
-        );
-        updateData.centerLng = finalCenterLng;
-        updateData.centerLat = finalCenterLat;
-        updateData.radius = finalRadius;
-      }
-    }
 
     if (coordinates && coordinates.length >= 3) {
       updateData.geom = Raw(() => GeoHelper.makePolygon(coordinates));
@@ -296,6 +244,33 @@ export class FenceService {
     }
 
     await this.fenceRepository.update(id, updateData as any);
+    return this.findOne(id);
+  }
+
+  async updateCoordinates(id: string, updateCoordinatesDto: UpdateFenceCoordinatesDto): Promise<Fence> {
+    const dto = this.normalizeDto(updateCoordinatesDto);
+    const { coordinates } = dto;
+
+    if (!coordinates || coordinates.length < 3) {
+      throw new BadRequestException('围栏至少需要3个坐标点');
+    }
+
+    const fence = await this.fenceRepository.findOne({ where: { id } });
+    if (!fence) {
+      throw new NotFoundException(`围栏 ${id} 不存在`);
+    }
+
+    const updateData: any = {
+      geom: Raw(() => GeoHelper.makePolygon(coordinates)),
+    };
+
+    const lngs = coordinates.map((c) => c.lng);
+    const lats = coordinates.map((c) => c.lat);
+    updateData.centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+    updateData.centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    updateData.radius = 0;
+
+    await this.fenceRepository.update(id, updateData);
     return this.findOne(id);
   }
 

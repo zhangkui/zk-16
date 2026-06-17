@@ -71,6 +71,7 @@ export const fenceApi = {
   checkPoint: (id: string, data: any) => api.post(`/fences/${id}/check-point`, data),
   findContainingPoint: (params: any) => api.get('/fences/contain-point', { params }),
   update: (id: string, data: any) => api.patch(`/fences/${id}`, data),
+  updateCoordinates: (id: string, data: any) => api.patch(`/fences/${id}/coordinates`, data),
   toggleStatus: (id: string, data: any) => api.patch(`/fences/${id}/toggle-status`, data),
   remove: (id: string) => api.delete(`/fences/${id}`),
 };
