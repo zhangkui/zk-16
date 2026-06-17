@@ -135,3 +135,14 @@ export const auditApi = {
   list: (params?: any) => api.get('/audit/logs', { params }),
   export: (params?: any) => api.get('/audit/logs/export', { params, responseType: 'blob' }),
 };
+
+export const simulationApi = {
+  start: (data?: any) => api.post('/simulation/start', data),
+  stop: () => api.post('/simulation/stop'),
+  status: () => api.get('/simulation/status'),
+  addVehicle: (data: any) => api.post('/simulation/vehicles', data),
+  removeVehicle: (plateNumber: string) => api.delete(`/simulation/vehicles/${plateNumber}`),
+  updateTarget: (plateNumber: string, data: any) => api.patch(`/simulation/vehicles/${plateNumber}/target`, data),
+  setSpeed: (plateNumber: string, data: any) => api.patch(`/simulation/vehicles/${plateNumber}/speed`, data),
+  reset: () => api.post('/simulation/reset'),
+};

@@ -15,6 +15,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { DisposalReceiptModule } from './modules/disposal-receipt/disposal-receipt.module';
 import { KafkaModule } from './kafka/kafka.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { SimulationModule } from './modules/simulation/simulation.module';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 
 @Module({
@@ -65,6 +66,7 @@ import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
     EvidenceModule,
     AuditModule,
     DisposalReceiptModule,
+    SimulationModule,
   ],
   providers: [
     {

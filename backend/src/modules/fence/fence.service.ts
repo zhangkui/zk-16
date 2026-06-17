@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw, Brackets } from 'typeorm';
 import { Fence, FenceType, FenceStatus } from './fence.entity';
@@ -6,6 +6,8 @@ import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto } from './
 
 @Injectable()
 export class FenceService {
+  private readonly logger = new Logger(FenceService.name);
+
   constructor(
     @InjectRepository(Fence)
     private readonly fenceRepository: Repository<Fence>,
@@ -58,6 +60,89 @@ export class FenceService {
     return normalized;
   }
 
+  private parseGeoJsonCoordinates(geom: any): { lng: number; lat: number }[] | null {
+    if (!geom) return null;
+
+    try {
+      let geoJson: any;
+      if (typeof geom === 'string') {
+        geoJson = JSON.parse(geom);
+      } else if (geom.type) {
+        geoJson = geom;
+      } else {
+        return null;
+      }
+
+      if (geoJson.type === 'Polygon' && geoJson.coordinates && geoJson.coordinates.length > 0) {
+        const ring = geoJson.coordinates[0];
+        return ring.map((coord: number[]) => ({
+          lng: coord[0],
+          lat: coord[1],
+        }));
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async enrichFenceWithCoordinates(fence: Fence): Promise<Fence & { coordinates?: { lng: number; lat: number }[] }> {
+    const fenceWithExtra = fence as any;
+
+    if (fence.radius && fence.radius > 0) {
+      fenceWithExtra.coordinates = null;
+      return fenceWithExtra;
+    }
+
+    try {
+      const result = await this.fenceRepository
+        .createQueryBuilder('fence')
+        .select('ST_AsGeoJSON(fence.geom)', 'geojson')
+        .where('fence.id = :id', { id: fence.id })
+        .getRawOne();
+
+      if (result?.geojson) {
+        fenceWithExtra.coordinates = this.parseGeoJsonCoordinates(result.geojson);
+      }
+    } catch (error) {
+      this.logger?.error?.('解析围栏坐标失败:', error);
+    }
+
+    return fenceWithExtra;
+  }
+
+  private async enrichFencesWithCoordinates(fences: Fence[]): Promise<any[]> {
+    if (fences.length === 0) return [];
+
+    const ids = fences.map((f) => f.id);
+    
+    try {
+      const results = await this.fenceRepository
+        .createQueryBuilder('fence')
+        .select('fence.id', 'id')
+        .addSelect('ST_AsGeoJSON(fence.geom)', 'geojson')
+        .where('fence.id IN (:...ids)', { ids })
+        .getRawMany();
+
+      const coordMap = new Map<string, { lng: number; lat: number }[]>();
+      results.forEach((r: any) => {
+        const coords = this.parseGeoJsonCoordinates(r.geojson);
+        if (coords) {
+          coordMap.set(r.id, coords);
+        }
+      });
+
+      return fences.map((fence) => ({
+        ...fence,
+        coordinates: (fence as any).radius > 0 ? null : coordMap.get(fence.id) || null,
+      }));
+    } catch (error) {
+      this.logger?.error?.('批量解析围栏坐标失败:', error);
+      return fences;
+    }
+  }
+
   async create(createFenceDto: CreateFenceDto): Promise<Fence> {
     const dto = this.normalizeDto(createFenceDto);
     const { coordinates, centerLng, centerLat, radius } = dto;
@@ -100,7 +185,7 @@ export class FenceService {
     return this.fenceRepository.save(fence) as unknown as Fence;
   }
 
-  async findAll(queryFenceDto: QueryFenceDto): Promise<{ data: Fence[]; total: number; page: number; pageSize: number }> {
+  async findAll(queryFenceDto: QueryFenceDto): Promise<{ data: any[]; total: number; page: number; pageSize: number }> {
     const dto = this.normalizeDto(queryFenceDto);
     const { type, status, district, page = 1, pageSize = 20 } = dto;
 
@@ -123,23 +208,25 @@ export class FenceService {
     queryBuilder.take(pageSize);
 
     const [data, total] = await queryBuilder.getManyAndCount();
+    const enrichedData = await this.enrichFencesWithCoordinates(data);
 
-    return { data, total, page, pageSize };
+    return { data: enrichedData, total, page, pageSize };
   }
 
-  async findOne(id: string): Promise<Fence> {
+  async findOne(id: string): Promise<any> {
     const fence = await this.fenceRepository.findOne({ where: { id } });
     if (!fence) {
       throw new NotFoundException(`围栏 ${id} 不存在`);
     }
-    return fence;
+    return this.enrichFenceWithCoordinates(fence);
   }
 
-  async getFencesByType(type: FenceType): Promise<Fence[]> {
-    return this.fenceRepository.find({
+  async getFencesByType(type: FenceType): Promise<any[]> {
+    const fences = await this.fenceRepository.find({
       where: { type, status: FenceStatus.ACTIVE },
       order: { createdAt: 'DESC' },
     });
+    return this.enrichFencesWithCoordinates(fences);
   }
 
   async checkPointInFence(id: string, checkPointDto: CheckPointDto): Promise<{ inFence: boolean; fence: Fence }> {
