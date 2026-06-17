@@ -67,8 +67,8 @@ declare global {
   }
 }
 
-const AMAP_KEY = '23d5d9da3a9737f7f45f0469345426b7';
-const AMAP_SECURITY_CODE = '16bbfc2770308c172a168326ac633c27';
+const AMAP_KEY = process.env.NEXT_PUBLIC_AMAP_KEY || '';
+const AMAP_SECURITY_CODE = process.env.NEXT_PUBLIC_AMAP_SECURITY_CODE || '';
 
 const fenceTypeMap: Record<string, { color: string; text: string }> = {
   loading: { color: 'blue', text: '装载区' },
@@ -138,6 +138,15 @@ export default function FencesPage() {
     });
   }, []);
 
+  const fetchSimulationStatus = useCallback(async () => {
+    try {
+      const res: any = await simulationApi.status();
+      setSimulationRunning(res.running || false);
+    } catch (error) {
+      console.error('获取模拟状态失败:', error);
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -174,6 +183,7 @@ export default function FencesPage() {
         });
 
         fetchFences();
+        fetchSimulationStatus();
       } catch (error: any) {
         message.error('地图加载失败: ' + error.message);
       }
@@ -188,7 +198,7 @@ export default function FencesPage() {
         mapRef.current = null;
       }
     };
-  }, []);
+  }, [fetchSimulationStatus]);
 
   useEffect(() => {
     if (mapRef.current && fences.length > 0) {
@@ -746,6 +756,9 @@ export default function FencesPage() {
         width={520}
         open={drawerVisible}
         onClose={handleCloseDrawer}
+        mask={false}
+        maskClosable={false}
+        placement="right"
         footer={
           <div style={{ textAlign: 'right' }}>
             <Space>

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw, Brackets } from 'typeorm';
 import { Fence, FenceType, FenceStatus } from './fence.entity';
 import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto } from './fence.dto';
+import { GeoHelper } from '../../common/helpers/geo.helper';
 
 @Injectable()
 export class FenceService {
@@ -98,7 +99,7 @@ export class FenceService {
     try {
       const result = await this.fenceRepository
         .createQueryBuilder('fence')
-        .select('ST_AsGeoJSON(fence.geom)', 'geojson')
+        .select(GeoHelper.asGeoJson('fence.geom'), 'geojson')
         .where('fence.id = :id', { id: fence.id })
         .getRawOne();
 
@@ -121,7 +122,7 @@ export class FenceService {
       const results = await this.fenceRepository
         .createQueryBuilder('fence')
         .select('fence.id', 'id')
-        .addSelect('ST_AsGeoJSON(fence.geom)', 'geojson')
+        .addSelect(GeoHelper.asGeoJson('fence.geom'), 'geojson')
         .where('fence.id IN (:...ids)', { ids })
         .getRawMany();
 
@@ -147,7 +148,7 @@ export class FenceService {
     const dto = this.normalizeDto(createFenceDto);
     const { coordinates, centerLng, centerLat, radius } = dto;
 
-    let geomExpression: string;
+    let geomValue: any;
     let finalCenterLng: number;
     let finalCenterLat: number;
     let finalRadius: number;
@@ -159,11 +160,11 @@ export class FenceService {
       finalCenterLng = centerLng;
       finalCenterLat = centerLat;
       finalRadius = radius;
-      geomExpression = `ST_Buffer(ST_SetSRID(ST_MakePoint(${centerLng}, ${centerLat}), 4326)::geography, ${radius})::geometry`;
+      geomValue = Raw(
+        () => GeoHelper.makeCircle(centerLng, centerLat, radius),
+      );
     } else if (coordinates && coordinates.length >= 3) {
-      const ring = [...coordinates, coordinates[0]];
-      const points = ring.map((c) => `${c.lng} ${c.lat}`).join(', ');
-      geomExpression = `ST_SetSRID(ST_MakePolygon(ST_GeomFromText('LINESTRING(${points})')), 4326)`;
+      geomValue = Raw(() => GeoHelper.makePolygon(coordinates));
 
       const lngs = coordinates.map((c) => c.lng);
       const lats = coordinates.map((c) => c.lat);
@@ -179,7 +180,7 @@ export class FenceService {
       centerLng: finalCenterLng,
       centerLat: finalCenterLat,
       radius: finalRadius,
-      geom: Raw(() => geomExpression),
+      geom: geomValue,
     } as any);
 
     return this.fenceRepository.save(fence) as unknown as Fence;
@@ -234,7 +235,7 @@ export class FenceService {
     const { lng, lat } = checkPointDto;
 
     const queryBuilder = this.fenceRepository.createQueryBuilder('fence');
-    queryBuilder.select('ST_Contains(fence.geom, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326))', 'in_fence');
+    queryBuilder.select(GeoHelper.containsSelect('fence.geom', 'in_fence'), 'in_fence');
     queryBuilder.where('fence.id = :id', { id });
     queryBuilder.setParameter('lng', lng);
     queryBuilder.setParameter('lat', lat);
@@ -252,7 +253,7 @@ export class FenceService {
     queryBuilder.where('fence.status = :status', { status: FenceStatus.ACTIVE });
     queryBuilder.andWhere(
       new Brackets((qb) => {
-        qb.where('ST_Contains(fence.geom, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)) = true');
+        qb.where(GeoHelper.contains('fence.geom', lng, lat));
       }),
     );
     queryBuilder.setParameter('lng', lng);
@@ -275,8 +276,8 @@ export class FenceService {
       const finalCenterLat = centerLat ?? fence.centerLat;
 
       if (finalRadius > 0) {
-        updateData.geom = Raw(
-          () => `ST_Buffer(ST_SetSRID(ST_MakePoint(${finalCenterLng}, ${finalCenterLat}), 4326)::geography, ${finalRadius})::geometry`,
+        updateData.geom = Raw(() =>
+          GeoHelper.makeCircle(finalCenterLng, finalCenterLat, finalRadius),
         );
         updateData.centerLng = finalCenterLng;
         updateData.centerLat = finalCenterLat;
@@ -285,11 +286,7 @@ export class FenceService {
     }
 
     if (coordinates && coordinates.length >= 3) {
-      const ring = [...coordinates, coordinates[0]];
-      const points = ring.map((c) => `${c.lng} ${c.lat}`).join(', ');
-      updateData.geom = Raw(
-        () => `ST_SetSRID(ST_MakePolygon(ST_GeomFromText('LINESTRING(${points})')), 4326)`,
-      );
+      updateData.geom = Raw(() => GeoHelper.makePolygon(coordinates));
 
       const lngs = coordinates.map((c) => c.lng);
       const lats = coordinates.map((c) => c.lat);

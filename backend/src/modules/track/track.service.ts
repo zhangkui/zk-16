@@ -11,6 +11,7 @@ import { AlertType, AlertLevel, Alert, AlertStatus } from '../alert/alert.entity
 import { Fence, FenceStatus, FenceType } from '../fence/fence.entity';
 import { point, lineString } from '@turf/helpers';
 import pointToLineDistance from '@turf/point-to-line-distance';
+import { GeoHelper } from '../../common/helpers/geo.helper';
 
 interface LatestPosition {
   plateNumber: string;
@@ -93,7 +94,7 @@ export class TrackService {
     queryBuilder.where('fence.status = :status', { status: FenceStatus.ACTIVE });
     queryBuilder.andWhere(
       new Brackets((qb) => {
-        qb.where('ST_Contains(fence.geom, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)) = true');
+        qb.where(GeoHelper.contains('fence.geom', lng, lat));
       }),
     );
     queryBuilder.setParameter('lng', lng);
@@ -294,7 +295,7 @@ export class TrackService {
       ...createTrackPointDto,
       timestamp: new Date(timestamp),
       transportOrderId: transportOrder?.id,
-      location: Raw(() => `ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)`),
+      location: Raw(() => GeoHelper.makePoint(longitude, latitude)),
       isDeviated,
       deviationDistance,
     } as any);
