@@ -108,6 +108,16 @@ export default function FencesPage() {
   const tempMarkersRef = useRef<any[]>([]);
   const fenceOverlaysRef = useRef<Map<string, any>>(new Map());
   const placeSearchRef = useRef<any>(null);
+  const isDrawingRef = useRef(false);
+  const polygonPointsRef = useRef<{ lng: number; lat: number }[]>([]);
+
+  useEffect(() => {
+    isDrawingRef.current = isDrawing;
+  }, [isDrawing]);
+
+  useEffect(() => {
+    polygonPointsRef.current = polygonPoints;
+  }, [polygonPoints]);
 
   const loadAmap = useCallback(() => {
     return new Promise<void>((resolve, reject) => {
@@ -168,9 +178,9 @@ export default function FencesPage() {
         });
 
         map.on('click', (e: any) => {
-          if (isDrawing) {
+          if (isDrawingRef.current) {
             const newPoint = { lng: e.lnglat.getLng(), lat: e.lnglat.getLat() };
-            const newPoints = [...polygonPoints, newPoint];
+            const newPoints = [...polygonPointsRef.current, newPoint];
             setPolygonPoints(newPoints);
             updateTempPolygon(newPoints);
           }
@@ -192,7 +202,7 @@ export default function FencesPage() {
         mapRef.current = null;
       }
     };
-  }, [fetchSimulationStatus, isDrawing, polygonPoints]);
+  }, []);
 
   useEffect(() => {
     if (mapRef.current && fences.length > 0) {

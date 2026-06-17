@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Raw, Brackets } from 'typeorm';
+import { Repository, Brackets } from 'typeorm';
 import { Fence, FenceType, FenceStatus } from './fence.entity';
 import { CreateFenceDto, UpdateFenceDto, QueryFenceDto, CheckPointDto, UpdateFenceCoordinatesDto } from './fence.dto';
 import { GeoHelper } from '../../common/helpers/geo.helper';
@@ -65,6 +65,14 @@ export class FenceService {
 
       if (geoJson.type === 'Polygon' && geoJson.coordinates && geoJson.coordinates.length > 0) {
         const ring = geoJson.coordinates[0];
+        if (ring.length >= 4 && 
+            ring[0][0] === ring[ring.length - 1][0] && 
+            ring[0][1] === ring[ring.length - 1][1]) {
+          return ring.slice(0, -1).map((coord: number[]) => ({
+            lng: coord[0],
+            lat: coord[1],
+          }));
+        }
         return ring.map((coord: number[]) => ({
           lng: coord[0],
           lat: coord[1],
@@ -131,23 +139,39 @@ export class FenceService {
 
   async create(createFenceDto: CreateFenceDto): Promise<Fence> {
     const dto = this.normalizeDto(createFenceDto);
-    const { coordinates } = dto;
+    const { coordinates, ...rest } = dto;
 
-    const createData: any = { ...dto };
+    const insertData: any = { ...rest };
 
+    let wkt: string | null = null;
     if (coordinates && coordinates.length >= 3) {
-      createData.geom = Raw(() => GeoHelper.makePolygon(coordinates));
+      wkt = GeoHelper.makePolygonWkt(coordinates);
 
       const lngs = coordinates.map((c) => c.lng);
       const lats = coordinates.map((c) => c.lat);
-      createData.centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-      createData.centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-      createData.radius = 0;
+      insertData.centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      insertData.centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+      insertData.radius = 0;
     }
 
-    const fence = this.fenceRepository.create(createData);
+    const qb = this.fenceRepository
+      .createQueryBuilder()
+      .insert()
+      .into(Fence)
+      .values({
+        ...insertData,
+        geom: wkt ? () => `ST_SetSRID(ST_GeomFromText(:wkt), 4326)` : undefined,
+      })
+      .returning('*');
 
-    return this.fenceRepository.save(fence) as unknown as Fence;
+    if (wkt) {
+      qb.setParameter('wkt', wkt);
+    }
+
+    const result = await qb.execute();
+    const savedId = result.identifiers[0].id;
+
+    return this.findOne(savedId);
   }
 
   async findAll(queryFenceDto: QueryFenceDto): Promise<{ data: any[]; total: number; page: number; pageSize: number }> {
@@ -194,47 +218,55 @@ export class FenceService {
     return this.enrichFencesWithCoordinates(fences);
   }
 
-  async checkPointInFence(id: string, checkPointDto: CheckPointDto): Promise<{ inFence: boolean; fence: Fence }> {
+  private pointInPolygon(point: { lng: number; lat: number }, polygon: { lng: number; lat: number }[]): boolean {
+    if (!polygon || polygon.length < 3) return false;
+
+    let inside = false;
+    const n = polygon.length;
+
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = polygon[i].lng, yi = polygon[i].lat;
+      const xj = polygon[j].lng, yj = polygon[j].lat;
+
+      const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
+        (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  async checkPointInFence(id: string, checkPointDto: CheckPointDto): Promise<{ inFence: boolean; fence: any }> {
     const fence = await this.findOne(id);
     const { lng, lat } = checkPointDto;
 
-    const queryBuilder = this.fenceRepository.createQueryBuilder('fence');
-    queryBuilder.select(GeoHelper.containsSelect('fence.geom', 'in_fence'), 'in_fence');
-    queryBuilder.where('fence.id = :id', { id });
-    queryBuilder.setParameter('lng', lng);
-    queryBuilder.setParameter('lat', lat);
-
-    const result = await queryBuilder.getRawOne();
-    const inFence = result?.in_fence === true || result?.in_fence === 't';
+    const inFence = this.pointInPolygon({ lng, lat }, fence.coordinates || []);
 
     return { inFence, fence };
   }
 
-  async findFencesContainingPoint(checkPointDto: CheckPointDto): Promise<Fence[]> {
+  async findFencesContainingPoint(checkPointDto: CheckPointDto): Promise<any[]> {
     const { lng, lat } = checkPointDto;
+    const point = { lng, lat };
 
-    const queryBuilder = this.fenceRepository.createQueryBuilder('fence');
-    queryBuilder.where('fence.status = :status', { status: FenceStatus.ACTIVE });
-    queryBuilder.andWhere(
-      new Brackets((qb) => {
-        qb.where(GeoHelper.contains('fence.geom', lng, lat));
-      }),
-    );
-    queryBuilder.setParameter('lng', lng);
-    queryBuilder.setParameter('lat', lat);
-    queryBuilder.orderBy('fence.createdAt', 'DESC');
+    const activeFences = await this.fenceRepository.find({
+      where: { status: FenceStatus.ACTIVE },
+      order: { createdAt: 'DESC' },
+    });
 
-    return queryBuilder.getMany();
+    const enriched = await this.enrichFencesWithCoordinates(activeFences);
+    return enriched.filter((fence) => this.pointInPolygon(point, fence.coordinates || []));
   }
 
   async update(id: string, updateFenceDto: UpdateFenceDto): Promise<Fence> {
     const dto = this.normalizeDto(updateFenceDto);
-    const { coordinates } = dto;
+    const { coordinates, ...rest } = dto;
 
-    const updateData: Partial<Fence> & { geom?: any } = { ...dto };
+    const updateData: any = { ...rest };
 
+    let wkt: string | null = null;
     if (coordinates && coordinates.length >= 3) {
-      updateData.geom = Raw(() => GeoHelper.makePolygon(coordinates));
+      wkt = GeoHelper.makePolygonWkt(coordinates);
 
       const lngs = coordinates.map((c) => c.lng);
       const lats = coordinates.map((c) => c.lat);
@@ -243,7 +275,20 @@ export class FenceService {
       updateData.radius = 0;
     }
 
-    await this.fenceRepository.update(id, updateData as any);
+    const qb = this.fenceRepository
+      .createQueryBuilder()
+      .update(Fence)
+      .set({
+        ...updateData,
+        ...(wkt && { geom: () => `ST_SetSRID(ST_GeomFromText(:wkt), 4326)` }),
+      })
+      .where('id = :id', { id });
+
+    if (wkt) {
+      qb.setParameter('wkt', wkt);
+    }
+
+    await qb.execute();
     return this.findOne(id);
   }
 
@@ -260,17 +305,26 @@ export class FenceService {
       throw new NotFoundException(`围栏 ${id} 不存在`);
     }
 
-    const updateData: any = {
-      geom: Raw(() => GeoHelper.makePolygon(coordinates)),
-    };
+    const wkt = GeoHelper.makePolygonWkt(coordinates);
 
     const lngs = coordinates.map((c) => c.lng);
     const lats = coordinates.map((c) => c.lat);
-    updateData.centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-    updateData.centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-    updateData.radius = 0;
+    const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+    const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
 
-    await this.fenceRepository.update(id, updateData);
+    await this.fenceRepository
+      .createQueryBuilder()
+      .update(Fence)
+      .set({
+        geom: () => `ST_SetSRID(ST_GeomFromText(:wkt), 4326)`,
+        centerLng,
+        centerLat,
+        radius: 0,
+      })
+      .where('id = :id', { id })
+      .setParameter('wkt', wkt)
+      .execute();
+
     return this.findOne(id);
   }
 

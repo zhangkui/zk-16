@@ -201,10 +201,12 @@ export class QueryFenceDto {
 
 export class CheckPointDto {
   @ApiProperty({ description: '经度', example: 116.397 })
+  @Type(() => Number)
   @IsNumber()
   lng: number;
 
   @ApiProperty({ description: '纬度', example: 39.908 })
+  @Type(() => Number)
   @IsNumber()
   lat: number;
 }
