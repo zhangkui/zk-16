@@ -1,9 +1,18 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, FindOptionsWhere, In, Not } from 'typeorm';
 import { Alert, AlertType, AlertLevel, AlertStatus } from './alert.entity';
+import { Vehicle } from '../vehicle/vehicle.entity';
+import { UserRole } from '../auth/user.entity';
 import { CreateAlertDto, QueryAlertDto, HandleAlertDto } from './alert.dto';
 import { KafkaService } from '../../kafka/kafka.service';
+
+interface UserContext {
+  id: string;
+  role: string;
+  companyId?: string;
+  isCompanySuperAdmin?: boolean;
+}
 
 export interface AlertStatistics {
   total: number;
@@ -23,8 +32,26 @@ export class AlertService {
   constructor(
     @InjectRepository(Alert)
     private readonly alertRepository: Repository<Alert>,
+    @InjectRepository(Vehicle)
+    private readonly vehicleRepository: Repository<Vehicle>,
     private readonly kafkaService: KafkaService,
   ) {}
+
+  private isCompanyAdmin(user: UserContext): boolean {
+    return (
+      user.role === UserRole.COMPANY_SUPER_ADMIN ||
+      user.role === UserRole.COMPANY_ADMIN
+    );
+  }
+
+  private async getCompanyPlateNumbers(user: UserContext): Promise<string[]> {
+    if (!this.isCompanyAdmin(user)) return [];
+    const vehicles = await this.vehicleRepository.find({
+      where: { companyId: user.companyId },
+      select: ['plateNumber'],
+    });
+    return vehicles.map((v) => v.plateNumber);
+  }
 
   private normalizeDto(dto: any): any {
     const normalized = { ...dto };
@@ -140,6 +167,7 @@ export class AlertService {
 
   async findAll(
     queryAlertDto: QueryAlertDto,
+    user: UserContext,
   ): Promise<{ data: Alert[]; total: number; page: number; pageSize: number }> {
     const dto = this.normalizeDto(queryAlertDto);
     const {
@@ -155,6 +183,14 @@ export class AlertService {
     } = dto;
 
     const queryBuilder = this.alertRepository.createQueryBuilder('alert');
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return { data: [], total: 0, page, pageSize };
+      }
+      queryBuilder.andWhere('alert.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+    }
 
     if (transportOrderId) {
       queryBuilder.andWhere('alert.transportOrderId = :transportOrderId', { transportOrderId });
@@ -193,17 +229,25 @@ export class AlertService {
     return { data, total, page, pageSize };
   }
 
-  async findOne(id: string): Promise<Alert> {
+  async findOne(id: string, user: UserContext): Promise<Alert> {
     const alert = await this.alertRepository.findOne({ where: { id } });
     if (!alert) {
       throw new NotFoundException(`告警 ${id} 不存在`);
     }
+
+    if (this.isCompanyAdmin(user)) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: alert.plateNumber } });
+      if (!vehicle || vehicle.companyId !== user.companyId) {
+        throw new ForbiddenException('无权访问该告警信息');
+      }
+    }
+
     return alert;
   }
 
-  async acknowledge(id: string, handleAlertDto: HandleAlertDto): Promise<Alert> {
+  async acknowledge(id: string, handleAlertDto: HandleAlertDto, user: UserContext): Promise<Alert> {
     const dto = this.normalizeDto(handleAlertDto);
-    const alert = await this.findOne(id);
+    const alert = await this.findOne(id, user);
 
     if (alert.status !== AlertStatus.PENDING) {
       throw new BadRequestException(`只有待处理状态的告警才能确认，当前状态: ${alert.status}`);
@@ -217,9 +261,9 @@ export class AlertService {
     return this.alertRepository.save(alert);
   }
 
-  async processAlert(id: string, handleAlertDto: HandleAlertDto): Promise<Alert> {
+  async processAlert(id: string, handleAlertDto: HandleAlertDto, user: UserContext): Promise<Alert> {
     const dto = this.normalizeDto(handleAlertDto);
-    const alert = await this.findOne(id);
+    const alert = await this.findOne(id, user);
 
     if (![AlertStatus.PENDING, AlertStatus.ACKNOWLEDGED].includes(alert.status)) {
       throw new BadRequestException(
@@ -235,9 +279,9 @@ export class AlertService {
     return this.alertRepository.save(alert);
   }
 
-  async closeAlert(id: string, handleAlertDto: HandleAlertDto): Promise<Alert> {
+  async closeAlert(id: string, handleAlertDto: HandleAlertDto, user: UserContext): Promise<Alert> {
     const dto = this.normalizeDto(handleAlertDto);
-    const alert = await this.findOne(id);
+    const alert = await this.findOne(id, user);
 
     if (alert.status === AlertStatus.CLOSED) {
       throw new BadRequestException('告警已关闭');
@@ -251,27 +295,67 @@ export class AlertService {
     return this.alertRepository.save(alert);
   }
 
-  async getAlertStatistics(queryAlertDto: QueryAlertDto): Promise<AlertStatistics> {
+  async getAlertStatistics(queryAlertDto: QueryAlertDto, user: UserContext): Promise<AlertStatistics> {
     const dto = this.normalizeDto(queryAlertDto);
     const { transportOrderId, plateNumber, timeFrom, timeTo } = dto;
 
-    const baseWhere: FindOptionsWhere<Alert> = {};
-    if (transportOrderId) baseWhere.transportOrderId = transportOrderId;
-    if (plateNumber) baseWhere.plateNumber = plateNumber;
+    const queryBuilderBase = this.alertRepository.createQueryBuilder('alert');
 
-    const timeRangeWhere: FindOptionsWhere<Alert> = { ...baseWhere };
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return {
+          total: 0,
+          pending: 0,
+          acknowledged: 0,
+          processed: 0,
+          closed: 0,
+          byType: {} as Record<AlertType, number>,
+          byLevel: {} as Record<AlertLevel, number>,
+          todayCount: 0,
+        };
+      }
+      queryBuilderBase.andWhere('alert.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+    }
+
+    if (transportOrderId) {
+      queryBuilderBase.andWhere('alert.transportOrderId = :transportOrderId', { transportOrderId });
+    }
+
+    if (plateNumber) {
+      queryBuilderBase.andWhere('alert.plateNumber = :plateNumber', { plateNumber });
+    }
+
+    const timeRangeQb = queryBuilderBase.clone();
     if (timeFrom && timeTo) {
-      timeRangeWhere.alertTime = Between(new Date(timeFrom), new Date(timeTo));
+      timeRangeQb.andWhere('alert.alertTime BETWEEN :timeFrom AND :timeTo', {
+        timeFrom: new Date(timeFrom),
+        timeTo: new Date(timeTo),
+      });
     } else if (timeFrom) {
-      timeRangeWhere.alertTime = Between(new Date(timeFrom), new Date());
+      timeRangeQb.andWhere('alert.alertTime >= :timeFrom', { timeFrom: new Date(timeFrom) });
     } else if (timeTo) {
-      timeRangeWhere.alertTime = Between(new Date(0), new Date(timeTo));
+      timeRangeQb.andWhere('alert.alertTime <= :timeTo', { timeTo: new Date(timeTo) });
     }
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
+
+    const todayQb = queryBuilderBase.clone();
+    todayQb.andWhere('alert.alertTime BETWEEN :todayStart AND :todayEnd', {
+      todayStart,
+      todayEnd,
+    });
+
+    const countByStatus = async (status?: AlertStatus) => {
+      const qb = timeRangeQb.clone();
+      if (status) {
+        qb.andWhere('alert.status = :status', { status });
+      }
+      return qb.getCount();
+    };
 
     const [
       total,
@@ -281,27 +365,21 @@ export class AlertService {
       closed,
       todayCount,
     ] = await Promise.all([
-      this.alertRepository.count({ where: timeRangeWhere }),
-      this.alertRepository.count({ where: { ...timeRangeWhere, status: AlertStatus.PENDING } }),
-      this.alertRepository.count({ where: { ...timeRangeWhere, status: AlertStatus.ACKNOWLEDGED } }),
-      this.alertRepository.count({ where: { ...timeRangeWhere, status: AlertStatus.PROCESSED } }),
-      this.alertRepository.count({ where: { ...timeRangeWhere, status: AlertStatus.CLOSED } }),
-      this.alertRepository.count({
-        where: {
-          ...baseWhere,
-          alertTime: Between(todayStart, todayEnd),
-        },
-      }),
+      countByStatus(),
+      countByStatus(AlertStatus.PENDING),
+      countByStatus(AlertStatus.ACKNOWLEDGED),
+      countByStatus(AlertStatus.PROCESSED),
+      countByStatus(AlertStatus.CLOSED),
+      todayQb.getCount(),
     ]);
 
     const byType: Record<AlertType, number> = {} as Record<AlertType, number>;
     const byLevel: Record<AlertLevel, number> = {} as Record<AlertLevel, number>;
 
-    const typeResults = await this.alertRepository
-      .createQueryBuilder('alert')
+    const typeQb = timeRangeQb.clone();
+    const typeResults = await typeQb
       .select('alert.type', 'type')
       .addSelect('COUNT(*)', 'count')
-      .where(timeRangeWhere as any)
       .groupBy('alert.type')
       .getRawMany();
 
@@ -309,11 +387,10 @@ export class AlertService {
       byType[r.type] = parseInt(r.count, 10);
     });
 
-    const levelResults = await this.alertRepository
-      .createQueryBuilder('alert')
+    const levelQb = timeRangeQb.clone();
+    const levelResults = await levelQb
       .select('alert.level', 'level')
       .addSelect('COUNT(*)', 'count')
-      .where(timeRangeWhere as any)
       .groupBy('alert.level')
       .getRawMany();
 
@@ -333,12 +410,21 @@ export class AlertService {
     };
   }
 
-  async getActiveAlerts(): Promise<Alert[]> {
-    return this.alertRepository.find({
-      where: {
-        status: Not(In([AlertStatus.CLOSED, AlertStatus.IGNORED])),
-      },
-      order: { alertTime: 'DESC' },
+  async getActiveAlerts(user: UserContext): Promise<Alert[]> {
+    const queryBuilder = this.alertRepository.createQueryBuilder('alert');
+    queryBuilder.where('alert.status NOT IN (:...statuses)', {
+      statuses: [AlertStatus.CLOSED, AlertStatus.IGNORED],
     });
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return [];
+      }
+      queryBuilder.andWhere('alert.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+    }
+
+    queryBuilder.orderBy('alert.alertTime', 'DESC');
+    return queryBuilder.getMany();
   }
 }

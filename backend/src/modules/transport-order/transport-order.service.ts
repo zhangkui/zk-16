@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw, Between, Like, In } from 'typeorm';
 import { TransportOrder, TransportOrderStatus } from './transport-order.entity';
 import { Vehicle } from '../vehicle/vehicle.entity';
 import { Fence, FenceType } from '../fence/fence.entity';
+import { UserRole } from '../auth/user.entity';
 import {
   CreateTransportOrderDto,
   UpdateTransportOrderDto,
@@ -11,6 +12,13 @@ import {
   UpdateStatusDto,
   RecordDeviationDto,
 } from './transport-order.dto';
+
+interface UserContext {
+  id: string;
+  role: string;
+  companyId?: string;
+  isCompanySuperAdmin?: boolean;
+}
 
 @Injectable()
 export class TransportOrderService {
@@ -22,6 +30,22 @@ export class TransportOrderService {
     @InjectRepository(Fence)
     private readonly fenceRepository: Repository<Fence>,
   ) {}
+
+  private isCompanyAdmin(user: UserContext): boolean {
+    return (
+      user.role === UserRole.COMPANY_SUPER_ADMIN ||
+      user.role === UserRole.COMPANY_ADMIN
+    );
+  }
+
+  private async getCompanyVehicleIds(user: UserContext): Promise<string[]> {
+    if (!this.isCompanyAdmin(user)) return [];
+    const vehicles = await this.vehicleRepository.find({
+      where: { companyId: user.companyId },
+      select: ['id'],
+    });
+    return vehicles.map((v) => v.id);
+  }
 
   private normalizeDto(dto: any): any {
     const normalized = { ...dto };
@@ -128,7 +152,7 @@ export class TransportOrderService {
     }
   }
 
-  async create(createTransportOrderDto: CreateTransportOrderDto): Promise<TransportOrder> {
+  async create(createTransportOrderDto: CreateTransportOrderDto, user: UserContext): Promise<TransportOrder> {
     const dto = this.normalizeDto(createTransportOrderDto);
 
     let vehicleId = dto.vehicleId;
@@ -162,6 +186,13 @@ export class TransportOrderService {
       }
     }
 
+    if (this.isCompanyAdmin(user) && vehicleId) {
+      const companyVehicleIds = await this.getCompanyVehicleIds(user);
+      if (!companyVehicleIds.includes(vehicleId)) {
+        throw new ForbiddenException('无权使用该车辆创建运输单');
+      }
+    }
+
     if (vehicleId && loadingFenceId && unloadingFenceId) {
       await this.validateVehicleAndFences(vehicleId, loadingFenceId, unloadingFenceId);
     }
@@ -185,6 +216,7 @@ export class TransportOrderService {
 
   async findAll(
     queryTransportOrderDto: QueryTransportOrderDto,
+    user: UserContext,
   ): Promise<{ data: TransportOrder[]; total: number; page: number; pageSize: number }> {
     const dto = this.normalizeDto(queryTransportOrderDto);
     const { orderNo, plateNumber, status, vehicleId, dateFrom, dateTo, page = 1, pageSize = 10 } = dto;
@@ -194,6 +226,14 @@ export class TransportOrderService {
       .leftJoinAndSelect('transportOrder.vehicle', 'vehicle')
       .leftJoinAndSelect('transportOrder.loadingFence', 'loadingFence')
       .leftJoinAndSelect('transportOrder.unloadingFence', 'unloadingFence');
+
+    if (this.isCompanyAdmin(user)) {
+      const companyVehicleIds = await this.getCompanyVehicleIds(user);
+      if (companyVehicleIds.length === 0) {
+        return { data: [], total: 0, page, pageSize };
+      }
+      queryBuilder.andWhere('transportOrder.vehicleId IN (:...vehicleIds)', { vehicleIds: companyVehicleIds });
+    }
 
     if (orderNo) {
       queryBuilder.andWhere('transportOrder.orderNo LIKE :orderNo', { orderNo: `%${orderNo}%` });
@@ -230,7 +270,7 @@ export class TransportOrderService {
     return { data, total, page, pageSize };
   }
 
-  async findOne(id: string): Promise<TransportOrder> {
+  async findOne(id: string, user: UserContext): Promise<TransportOrder> {
     const transportOrder = await this.transportOrderRepository.findOne({
       where: { id },
       relations: ['vehicle', 'loadingFence', 'unloadingFence'],
@@ -238,10 +278,18 @@ export class TransportOrderService {
     if (!transportOrder) {
       throw new NotFoundException(`运输单ID ${id} 不存在`);
     }
+
+    if (this.isCompanyAdmin(user)) {
+      const companyVehicleIds = await this.getCompanyVehicleIds(user);
+      if (!companyVehicleIds.includes(transportOrder.vehicleId)) {
+        throw new ForbiddenException('无权访问该运输单信息');
+      }
+    }
+
     return transportOrder;
   }
 
-  async findByOrderNo(orderNo: string): Promise<TransportOrder> {
+  async findByOrderNo(orderNo: string, user: UserContext): Promise<TransportOrder> {
     const transportOrder = await this.transportOrderRepository.findOne({
       where: { orderNo },
       relations: ['vehicle', 'loadingFence', 'unloadingFence'],
@@ -249,10 +297,25 @@ export class TransportOrderService {
     if (!transportOrder) {
       throw new NotFoundException(`运输单号 ${orderNo} 不存在`);
     }
+
+    if (this.isCompanyAdmin(user)) {
+      const companyVehicleIds = await this.getCompanyVehicleIds(user);
+      if (!companyVehicleIds.includes(transportOrder.vehicleId)) {
+        throw new ForbiddenException('无权访问该运输单信息');
+      }
+    }
+
     return transportOrder;
   }
 
-  async findActiveOrdersByVehicle(vehicleId: string): Promise<TransportOrder[]> {
+  async findActiveOrdersByVehicle(vehicleId: string, user: UserContext): Promise<TransportOrder[]> {
+    if (this.isCompanyAdmin(user)) {
+      const companyVehicleIds = await this.getCompanyVehicleIds(user);
+      if (!companyVehicleIds.includes(vehicleId)) {
+        return [];
+      }
+    }
+
     const activeStatuses = [
       TransportOrderStatus.PENDING,
       TransportOrderStatus.IN_TRANSIT,
@@ -271,8 +334,8 @@ export class TransportOrderService {
     });
   }
 
-  async updateStatus(id: string, updateStatusDto: UpdateStatusDto): Promise<TransportOrder> {
-    const transportOrder = await this.findOne(id);
+  async updateStatus(id: string, updateStatusDto: UpdateStatusDto, user: UserContext): Promise<TransportOrder> {
+    const transportOrder = await this.findOne(id, user);
     const dto = this.normalizeDto(updateStatusDto);
     const status = dto.status as TransportOrderStatus;
     const { remark } = dto;
@@ -318,8 +381,8 @@ export class TransportOrderService {
     return this.transportOrderRepository.save(transportOrder);
   }
 
-  async recordDeviation(id: string, recordDeviationDto: RecordDeviationDto): Promise<TransportOrder> {
-    const transportOrder = await this.findOne(id);
+  async recordDeviation(id: string, recordDeviationDto: RecordDeviationDto, user: UserContext): Promise<TransportOrder> {
+    const transportOrder = await this.findOne(id, user);
 
     if (
       transportOrder.status === TransportOrderStatus.COMPLETED ||
@@ -335,8 +398,8 @@ export class TransportOrderService {
     return this.transportOrderRepository.save(transportOrder);
   }
 
-  async complete(id: string, actualWeight?: number): Promise<TransportOrder> {
-    const transportOrder = await this.findOne(id);
+  async complete(id: string, user: UserContext, actualWeight?: number): Promise<TransportOrder> {
+    const transportOrder = await this.findOne(id, user);
 
     if (transportOrder.status !== TransportOrderStatus.UNLOADING) {
       throw new BadRequestException('只有在卸货中状态才能完成运输单');
@@ -357,8 +420,8 @@ export class TransportOrderService {
     return this.transportOrderRepository.save(transportOrder);
   }
 
-  async cancel(id: string, remark?: string): Promise<TransportOrder> {
-    const transportOrder = await this.findOne(id);
+  async cancel(id: string, user: UserContext, remark?: string): Promise<TransportOrder> {
+    const transportOrder = await this.findOne(id, user);
 
     if (
       transportOrder.status === TransportOrderStatus.COMPLETED ||
@@ -375,8 +438,8 @@ export class TransportOrderService {
     return this.transportOrderRepository.save(transportOrder);
   }
 
-  async update(id: string, updateTransportOrderDto: UpdateTransportOrderDto): Promise<TransportOrder> {
-    const transportOrder = await this.findOne(id);
+  async update(id: string, updateTransportOrderDto: UpdateTransportOrderDto, user: UserContext): Promise<TransportOrder> {
+    const transportOrder = await this.findOne(id, user);
     const dto = this.normalizeDto(updateTransportOrderDto);
 
     let vehicleId = dto.vehicleId;
@@ -387,6 +450,13 @@ export class TransportOrderService {
       const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: dto.plateNumber } });
       if (vehicle) {
         vehicleId = vehicle.id;
+      }
+    }
+
+    if (this.isCompanyAdmin(user) && vehicleId) {
+      const companyVehicleIds = await this.getCompanyVehicleIds(user);
+      if (!companyVehicleIds.includes(vehicleId)) {
+        throw new ForbiddenException('无权使用该车辆');
       }
     }
 
@@ -430,8 +500,8 @@ export class TransportOrderService {
     return this.transportOrderRepository.save(transportOrder);
   }
 
-  async remove(id: string): Promise<void> {
-    const transportOrder = await this.findOne(id);
+  async remove(id: string, user: UserContext): Promise<void> {
+    const transportOrder = await this.findOne(id, user);
     await this.transportOrderRepository.remove(transportOrder);
   }
 }

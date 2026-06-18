@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 
 export enum FenceType {
   LOADING = 'loading',
@@ -85,6 +86,10 @@ export class Fence {
 
   @Column({ type: 'time', nullable: true, comment: '允许作业结束时间' })
   workEndTime: string;
+
+  @ApiProperty({ description: '所属公司ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '所属公司ID' })
+  companyId: string;
 
   @CreateDateColumn({ comment: '创建时间' })
   createdAt: Date;

@@ -1,15 +1,23 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DisposalReceipt, DisposalReceiptStatus } from './disposal-receipt.entity';
 import { TransportOrder } from '../transport-order/transport-order.entity';
 import { Vehicle } from '../vehicle/vehicle.entity';
+import { UserRole } from '../auth/user.entity';
 import {
   CreateDisposalReceiptDto,
   UpdateDisposalReceiptDto,
   QueryDisposalReceiptDto,
   MatchReceiptDto,
 } from './disposal-receipt.dto';
+
+interface UserContext {
+  id: string;
+  role: string;
+  companyId?: string;
+  isCompanySuperAdmin?: boolean;
+}
 
 interface MatchDiff {
   plateNumber?: { receipt: string; transport: string };
@@ -36,6 +44,22 @@ export class DisposalReceiptService {
     private readonly vehicleRepository: Repository<Vehicle>,
   ) {}
 
+  private isCompanyAdmin(user: UserContext): boolean {
+    return (
+      user.role === UserRole.COMPANY_SUPER_ADMIN ||
+      user.role === UserRole.COMPANY_ADMIN
+    );
+  }
+
+  private async getCompanyPlateNumbers(user: UserContext): Promise<string[]> {
+    if (!this.isCompanyAdmin(user)) return [];
+    const vehicles = await this.vehicleRepository.find({
+      where: { companyId: user.companyId },
+      select: ['plateNumber'],
+    });
+    return vehicles.map((v) => v.plateNumber);
+  }
+
   async create(createDisposalReceiptDto: CreateDisposalReceiptDto): Promise<DisposalReceipt> {
     const existing = await this.disposalReceiptRepository.findOne({
       where: { receiptNo: createDisposalReceiptDto.receiptNo },
@@ -54,6 +78,7 @@ export class DisposalReceiptService {
 
   async findAll(
     queryDisposalReceiptDto: QueryDisposalReceiptDto,
+    user: UserContext,
   ): Promise<{ data: DisposalReceipt[]; total: number; page: number; pageSize: number }> {
     const {
       receiptNo,
@@ -67,6 +92,14 @@ export class DisposalReceiptService {
     } = queryDisposalReceiptDto;
 
     const queryBuilder = this.disposalReceiptRepository.createQueryBuilder('receipt');
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return { data: [], total: 0, page, pageSize };
+      }
+      queryBuilder.andWhere('receipt.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+    }
 
     if (receiptNo) {
       queryBuilder.andWhere('receipt.receiptNo LIKE :receiptNo', {
@@ -112,30 +145,55 @@ export class DisposalReceiptService {
     };
   }
 
-  async findOne(id: string): Promise<DisposalReceipt> {
+  async findOne(id: string, user: UserContext): Promise<DisposalReceipt> {
     const receipt = await this.disposalReceiptRepository.findOne({ where: { id } });
     if (!receipt) {
       throw new NotFoundException(`处置联单ID ${id} 不存在`);
     }
+
+    if (this.isCompanyAdmin(user)) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: receipt.plateNumber } });
+      if (!vehicle || vehicle.companyId !== user.companyId) {
+        throw new ForbiddenException('无权访问该处置联单信息');
+      }
+    }
+
     return receipt;
   }
 
-  async findByReceiptNo(receiptNo: string): Promise<DisposalReceipt> {
+  async findByReceiptNo(receiptNo: string, user: UserContext): Promise<DisposalReceipt> {
     const receipt = await this.disposalReceiptRepository.findOne({ where: { receiptNo } });
     if (!receipt) {
       throw new NotFoundException(`联单编号 ${receiptNo} 不存在`);
     }
+
+    if (this.isCompanyAdmin(user)) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: receipt.plateNumber } });
+      if (!vehicle || vehicle.companyId !== user.companyId) {
+        throw new ForbiddenException('无权访问该处置联单信息');
+      }
+    }
+
     return receipt;
   }
 
-  async getUnmatchedReceipts(): Promise<DisposalReceipt[]> {
-    return this.disposalReceiptRepository.find({
-      where: { status: DisposalReceiptStatus.PENDING },
-      order: { createdAt: 'DESC' },
-    });
+  async getUnmatchedReceipts(user: UserContext): Promise<DisposalReceipt[]> {
+    const queryBuilder = this.disposalReceiptRepository.createQueryBuilder('receipt');
+    queryBuilder.where('receipt.status = :status', { status: DisposalReceiptStatus.PENDING });
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return [];
+      }
+      queryBuilder.andWhere('receipt.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+    }
+
+    queryBuilder.orderBy('receipt.createdAt', 'DESC');
+    return queryBuilder.getMany();
   }
 
-  async getMatchStatistics(): Promise<{
+  async getMatchStatistics(user: UserContext): Promise<{
     total: number;
     pending: number;
     matched: number;
@@ -143,19 +201,39 @@ export class DisposalReceiptService {
     expired: number;
     matchRate: number;
   }> {
-    const total = await this.disposalReceiptRepository.count();
-    const pending = await this.disposalReceiptRepository.count({
-      where: { status: DisposalReceiptStatus.PENDING },
-    });
-    const matched = await this.disposalReceiptRepository.count({
-      where: { status: DisposalReceiptStatus.MATCHED },
-    });
-    const mismatched = await this.disposalReceiptRepository.count({
-      where: { status: DisposalReceiptStatus.MISMATCHED },
-    });
-    const expired = await this.disposalReceiptRepository.count({
-      where: { status: DisposalReceiptStatus.EXPIRED },
-    });
+    let companyPlateNumbers: string[] = [];
+    if (this.isCompanyAdmin(user)) {
+      companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return {
+          total: 0,
+          pending: 0,
+          matched: 0,
+          mismatched: 0,
+          expired: 0,
+          matchRate: 0,
+        };
+      }
+    }
+
+    const buildCountQuery = (status?: DisposalReceiptStatus) => {
+      const qb = this.disposalReceiptRepository.createQueryBuilder('receipt');
+      if (status) {
+        qb.where('receipt.status = :status', { status });
+      }
+      if (this.isCompanyAdmin(user) && companyPlateNumbers.length > 0) {
+        qb.andWhere('receipt.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+      }
+      return qb.getCount();
+    };
+
+    const [total, pending, matched, mismatched, expired] = await Promise.all([
+      buildCountQuery(),
+      buildCountQuery(DisposalReceiptStatus.PENDING),
+      buildCountQuery(DisposalReceiptStatus.MATCHED),
+      buildCountQuery(DisposalReceiptStatus.MISMATCHED),
+      buildCountQuery(DisposalReceiptStatus.EXPIRED),
+    ]);
 
     const processed = matched + mismatched;
     const matchRate = processed > 0 ? Number(((matched / processed) * 100).toFixed(2)) : 0;
@@ -259,8 +337,8 @@ export class DisposalReceiptService {
     };
   }
 
-  async matchReceipt(id: string, matchReceiptDto: MatchReceiptDto): Promise<DisposalReceipt> {
-    const receipt = await this.findOne(id);
+  async matchReceipt(id: string, matchReceiptDto: MatchReceiptDto, user: UserContext): Promise<DisposalReceipt> {
+    const receipt = await this.findOne(id, user);
 
     if (receipt.status !== DisposalReceiptStatus.PENDING) {
       throw new BadRequestException('该联单已完成匹配，无需重复操作');
@@ -285,8 +363,8 @@ export class DisposalReceiptService {
     return this.disposalReceiptRepository.save(receipt);
   }
 
-  async update(id: string, updateDisposalReceiptDto: UpdateDisposalReceiptDto): Promise<DisposalReceipt> {
-    const receipt = await this.findOne(id);
+  async update(id: string, updateDisposalReceiptDto: UpdateDisposalReceiptDto, user: UserContext): Promise<DisposalReceipt> {
+    const receipt = await this.findOne(id, user);
 
     if (updateDisposalReceiptDto.receiptNo && updateDisposalReceiptDto.receiptNo !== receipt.receiptNo) {
       const existing = await this.disposalReceiptRepository.findOne({
@@ -302,8 +380,8 @@ export class DisposalReceiptService {
     return this.disposalReceiptRepository.save(receipt);
   }
 
-  async remove(id: string): Promise<void> {
-    const receipt = await this.findOne(id);
+  async remove(id: string, user: UserContext): Promise<void> {
+    const receipt = await this.findOne(id, user);
     await this.disposalReceiptRepository.remove(receipt);
   }
 }

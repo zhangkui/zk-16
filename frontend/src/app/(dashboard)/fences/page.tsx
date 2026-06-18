@@ -205,10 +205,10 @@ export default function FencesPage() {
   }, []);
 
   useEffect(() => {
-    if (mapRef.current && fences.length > 0) {
+    if (mapRef.current) {
       renderFencesOnMap();
     }
-  }, [fences]);
+  }, [fences, selectedFence]);
 
   useEffect(() => {
     if (mapRef.current) {
@@ -243,7 +243,9 @@ export default function FencesPage() {
     });
     fenceOverlaysRef.current.clear();
 
-    fences.forEach((fence) => {
+    const fencesToRender = selectedFence ? fences.filter((f) => f.id === selectedFence.id) : fences;
+
+    fencesToRender.forEach((fence) => {
       const color = fenceColorMap[fence.fenceType] || '#1677ff';
       
       if (fence.coordinates && fence.coordinates.length >= 3) {
@@ -262,6 +264,15 @@ export default function FencesPage() {
         fenceOverlaysRef.current.set(fence.id, polygon);
       }
     });
+
+    if (selectedFence && selectedFence.coordinates && selectedFence.coordinates.length >= 3) {
+      const lats = selectedFence.coordinates.map((p) => p.lat);
+      const lngs = selectedFence.coordinates.map((p) => p.lng);
+      const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+      const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      mapRef.current.setCenter([centerLng, centerLat]);
+      mapRef.current.setZoom(14);
+    }
   };
 
   const clearTempOverlays = () => {
@@ -437,6 +448,8 @@ export default function FencesPage() {
       setCurrentStep(1);
       setDrawerVisible(false);
       setIsDrawing(true);
+      
+      fetchFences();
       
       const existingCoords = savedFence.coordinates || savedFence.geometry?.coordinates?.[0]?.map(
         (c: number[]) => ({ lng: c[0], lat: c[1] })

@@ -1,11 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Query, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import { Request } from 'express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AlertService, AlertStatistics } from './alert.service';
 import { CreateAlertDto, QueryAlertDto, HandleAlertDto } from './alert.dto';
 import { Alert } from './alert.entity';
 
 @ApiTags('告警管理')
+@ApiBearerAuth()
 @Controller('alerts')
+@UseGuards(JwtAuthGuard)
 export class AlertController {
   constructor(private readonly alertService: AlertService) {}
 
@@ -24,22 +28,26 @@ export class AlertController {
   @ApiResponse({ status: 200, description: '查询成功' })
   findAll(
     @Query() queryAlertDto: QueryAlertDto,
+    @Req() req: Request,
   ): Promise<{ data: Alert[]; total: number; page: number; pageSize: number }> {
-    return this.alertService.findAll(queryAlertDto);
+    const user = (req as any).user;
+    return this.alertService.findAll(queryAlertDto, user);
   }
 
   @Get('active')
   @ApiOperation({ summary: '获取所有活跃告警（未关闭/未忽略）' })
   @ApiResponse({ status: 200, description: '查询成功', type: [Alert] })
-  getActiveAlerts(): Promise<Alert[]> {
-    return this.alertService.getActiveAlerts();
+  getActiveAlerts(@Req() req: Request): Promise<Alert[]> {
+    const user = (req as any).user;
+    return this.alertService.getActiveAlerts(user);
   }
 
   @Get('statistics')
   @ApiOperation({ summary: '获取告警统计数据' })
   @ApiResponse({ status: 200, description: '查询成功' })
-  getAlertStatistics(@Query() queryAlertDto: QueryAlertDto): Promise<AlertStatistics> {
-    return this.alertService.getAlertStatistics(queryAlertDto);
+  getAlertStatistics(@Query() queryAlertDto: QueryAlertDto, @Req() req: Request): Promise<AlertStatistics> {
+    const user = (req as any).user;
+    return this.alertService.getAlertStatistics(queryAlertDto, user);
   }
 
   @Get(':id')
@@ -47,8 +55,9 @@ export class AlertController {
   @ApiParam({ name: 'id', description: '告警ID' })
   @ApiResponse({ status: 200, description: '查询成功', type: Alert })
   @ApiResponse({ status: 404, description: '告警不存在' })
-  findOne(@Param('id') id: string): Promise<Alert> {
-    return this.alertService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: Request): Promise<Alert> {
+    const user = (req as any).user;
+    return this.alertService.findOne(id, user);
   }
 
   @Patch(':id/acknowledge')
@@ -61,8 +70,10 @@ export class AlertController {
   acknowledge(
     @Param('id') id: string,
     @Body() handleAlertDto: HandleAlertDto,
+    @Req() req: Request,
   ): Promise<Alert> {
-    return this.alertService.acknowledge(id, handleAlertDto);
+    const user = (req as any).user;
+    return this.alertService.acknowledge(id, handleAlertDto, user);
   }
 
   @Patch(':id/process')
@@ -75,8 +86,10 @@ export class AlertController {
   processAlert(
     @Param('id') id: string,
     @Body() handleAlertDto: HandleAlertDto,
+    @Req() req: Request,
   ): Promise<Alert> {
-    return this.alertService.processAlert(id, handleAlertDto);
+    const user = (req as any).user;
+    return this.alertService.processAlert(id, handleAlertDto, user);
   }
 
   @Patch(':id/close')
@@ -89,7 +102,9 @@ export class AlertController {
   closeAlert(
     @Param('id') id: string,
     @Body() handleAlertDto: HandleAlertDto,
+    @Req() req: Request,
   ): Promise<Alert> {
-    return this.alertService.closeAlert(id, handleAlertDto);
+    const user = (req as any).user;
+    return this.alertService.closeAlert(id, handleAlertDto, user);
   }
 }

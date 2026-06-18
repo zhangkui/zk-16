@@ -17,8 +17,9 @@ import {
   Col,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { vehicleApi } from '@/services/api';
+import { vehicleApi, companyApi } from '@/services/api';
 import { useAuthStore } from '@/store/auth';
+import dayjs from 'dayjs';
 
 const { Option } = Select;
 
@@ -37,10 +38,17 @@ interface Vehicle {
   createdAt: string;
 }
 
+interface Company {
+  id: string;
+  name: string;
+}
+
 export default function VehiclesPage() {
   const { user } = useAuthStore();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [approveModalVisible, setApproveModalVisible] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
@@ -53,7 +61,23 @@ export default function VehiclesPage() {
 
   useEffect(() => {
     fetchVehicles();
+    if (!isCompanyAdmin) {
+      fetchCompanies();
+    }
   }, []);
+
+  const fetchCompanies = async () => {
+    setCompaniesLoading(true);
+    try {
+      const res = await companyApi.list({ pageSize: 1000 });
+      const list = res.data?.list || res.data?.data || [];
+      setCompanies(list);
+    } catch (error) {
+      console.error('Failed to fetch companies:', error);
+    } finally {
+      setCompaniesLoading(false);
+    }
+  };
 
   const fetchVehicles = async () => {
     setLoading(true);
@@ -73,7 +97,10 @@ export default function VehiclesPage() {
     setEditingVehicle(null);
     form.resetFields();
     if (isCompanyAdmin) {
-      form.setFieldsValue({ company: user?.company || '' });
+      form.setFieldsValue({
+        company: user?.company || '',
+        companyId: user?.companyId || '',
+      });
     }
     setModalVisible(true);
   };
@@ -97,13 +124,21 @@ export default function VehiclesPage() {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      const submitData: any = { ...values };
+      if (!isCompanyAdmin && values.companyId) {
+        const selectedCompany = companies.find((c) => c.id === values.companyId);
+        if (selectedCompany) {
+          submitData.company = selectedCompany.name;
+          submitData.companyName = selectedCompany.name;
+        }
+      }
       if (editingVehicle) {
-        await vehicleApi.update(editingVehicle.id, values);
-        setVehicles(vehicles.map((v) => (v.id === editingVehicle.id ? { ...v, ...values } : v)));
+        await vehicleApi.update(editingVehicle.id, submitData);
+        setVehicles(vehicles.map((v) => (v.id === editingVehicle.id ? { ...v, ...submitData } : v)));
         message.success('更新成功');
       } else {
-        const res = await vehicleApi.create(values);
-        const newVehicle = { ...values, id: res.data?.id || Date.now().toString(), status: 'pending', createdAt: new Date().toISOString() };
+        const res = await vehicleApi.create(submitData);
+        const newVehicle = { ...submitData, id: res.data?.id || Date.now().toString(), status: 'pending', createdAt: new Date().toISOString() };
         setVehicles([newVehicle, ...vehicles]);
         message.success('添加成功');
       }
@@ -160,7 +195,7 @@ export default function VehiclesPage() {
     { title: '所属公司', dataIndex: 'company', key: 'company' },
     { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: Vehicle['status']) => getStatusTag(s) },
     { title: '备注', dataIndex: 'remark', key: 'remark' },
-    { title: '备案时间', dataIndex: 'createdAt', key: 'createdAt', width: 180 },
+    { title: '备案时间', dataIndex: 'createdAt', key: 'createdAt', width: 180, render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-' },
     {
       title: '操作',
       key: 'action',
@@ -259,9 +294,29 @@ export default function VehiclesPage() {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="company" label="所属公司" rules={isCompanyAdmin ? [] : [{ required: true, message: '请输入所属公司' }]}>
-            <Input placeholder="请输入所属公司" disabled={isCompanyAdmin} />
-          </Form.Item>
+          {isCompanyAdmin ? (
+            <Form.Item name="company" label="所属公司">
+              <Input placeholder="所属公司" disabled />
+            </Form.Item>
+          ) : (
+            <Form.Item name="companyId" label="所属公司" rules={[{ required: true, message: '请选择所属公司' }]}>
+              <Select
+                placeholder="请选择所属公司"
+                loading={companiesLoading}
+                showSearch
+                optionFilterProp="children"
+                filterOption={(input, option) =>
+                  (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+              >
+                {companies.map((c) => (
+                  <Option key={c.id} value={c.id}>
+                    {c.name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          )}
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={3} placeholder="请输入备注" />
           </Form.Item>

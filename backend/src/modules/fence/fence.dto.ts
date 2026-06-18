@@ -87,6 +87,11 @@ export class CreateFenceDto {
   @IsOptional()
   @Matches(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, { message: '时间格式必须为 HH:mm:ss' })
   workEndTime?: string;
+
+  @ApiPropertyOptional({ description: '所属公司ID' })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 }
 
 export class UpdateFenceDto {
@@ -161,6 +166,11 @@ export class UpdateFenceDto {
   @IsOptional()
   @Matches(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, { message: '时间格式必须为 HH:mm:ss' })
   workEndTime?: string;
+
+  @ApiPropertyOptional({ description: '所属公司ID' })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 }
 
 export class UpdateFenceCoordinatesDto {
@@ -185,6 +195,11 @@ export class QueryFenceDto {
   @IsOptional()
   @IsString()
   district?: string;
+
+  @ApiPropertyOptional({ description: '所属公司ID' })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 
   @ApiPropertyOptional({ description: '页码', default: 1 })
   @IsOptional()

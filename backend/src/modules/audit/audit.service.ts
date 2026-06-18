@@ -3,7 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, FindOptionsWhere } from 'typeorm';
 import { AuditLog, AuditModule, AuditAction } from './audit.entity';
 import { QueryAuditLogDto, AuditLogExportOptions } from './audit.dto';
+import { UserRole, User } from '../auth/user.entity';
 import * as dayjs from 'dayjs';
+
+interface UserContext {
+  id: string;
+  role: string;
+  companyId?: string;
+  isCompanySuperAdmin?: boolean;
+}
 
 @Injectable()
 export class AuditService {
@@ -12,7 +20,16 @@ export class AuditService {
   constructor(
     @InjectRepository(AuditLog)
     private auditLogRepository: Repository<AuditLog>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
+
+  private isCompanyAdmin(user: UserContext): boolean {
+    return (
+      user.role === UserRole.COMPANY_SUPER_ADMIN ||
+      user.role === UserRole.COMPANY_ADMIN
+    );
+  }
 
   async recordLog(
     data: Partial<AuditLog> & {
@@ -52,6 +69,7 @@ export class AuditService {
 
   async findAll(
     queryDto: QueryAuditLogDto,
+    user: UserContext,
   ): Promise<{ list: AuditLog[]; total: number; page: number; pageSize: number }> {
     const {
       page = 1,
@@ -65,45 +83,49 @@ export class AuditService {
       success,
     } = queryDto;
 
-    const where: FindOptionsWhere<AuditLog> = {};
+    const queryBuilder = this.auditLogRepository.createQueryBuilder('auditLog');
+
+    if (this.isCompanyAdmin(user)) {
+      queryBuilder.innerJoin('users', 'user', 'auditLog.userId = user.id');
+      queryBuilder.andWhere('user.companyId = :companyId', { companyId: user.companyId });
+    }
 
     if (module) {
-      where.module = module;
+      queryBuilder.andWhere('auditLog.module = :module', { module });
     }
 
     if (action) {
-      where.action = action;
+      queryBuilder.andWhere('auditLog.action = :action', { action });
     }
 
     if (userId) {
-      where.userId = userId;
+      queryBuilder.andWhere('auditLog.userId = :userId', { userId });
     }
 
     if (username) {
-      where.username = username;
+      queryBuilder.andWhere('auditLog.username = :username', { username });
     }
 
     if (success !== undefined) {
-      where.success = success;
+      queryBuilder.andWhere('auditLog.success = :success', { success });
     }
 
     if (startTime && endTime) {
-      where.createdAt = Between(
-        new Date(startTime),
-        new Date(endTime),
-      );
+      queryBuilder.andWhere('auditLog.createdAt BETWEEN :startTime AND :endTime', {
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+      });
     } else if (startTime) {
-      where.createdAt = Between(new Date(startTime), new Date());
+      queryBuilder.andWhere('auditLog.createdAt >= :startTime', { startTime: new Date(startTime) });
     } else if (endTime) {
-      where.createdAt = Between(new Date(0), new Date(endTime));
+      queryBuilder.andWhere('auditLog.createdAt <= :endTime', { endTime: new Date(endTime) });
     }
 
-    const [list, total] = await this.auditLogRepository.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    });
+    queryBuilder.orderBy('auditLog.createdAt', 'DESC');
+    queryBuilder.skip((page - 1) * pageSize);
+    queryBuilder.take(pageSize);
+
+    const [list, total] = await queryBuilder.getManyAndCount();
 
     return { list, total, page, pageSize };
   }
@@ -112,24 +134,27 @@ export class AuditService {
     module: AuditModule,
     page: number = 1,
     pageSize: number = 10,
+    user: UserContext,
   ): Promise<{ list: AuditLog[]; total: number; page: number; pageSize: number }> {
-    return this.findAll({ module, page, pageSize });
+    return this.findAll({ module, page, pageSize }, user);
   }
 
   async findByAction(
     action: AuditAction,
     page: number = 1,
     pageSize: number = 10,
+    user: UserContext,
   ): Promise<{ list: AuditLog[]; total: number; page: number; pageSize: number }> {
-    return this.findAll({ action, page, pageSize });
+    return this.findAll({ action, page, pageSize }, user);
   }
 
   async findByUser(
     userId: string,
     page: number = 1,
     pageSize: number = 10,
+    user: UserContext,
   ): Promise<{ list: AuditLog[]; total: number; page: number; pageSize: number }> {
-    return this.findAll({ userId, page, pageSize });
+    return this.findAll({ userId, page, pageSize }, user);
   }
 
   async findByTimeRange(
@@ -137,29 +162,37 @@ export class AuditService {
     endTime: string,
     page: number = 1,
     pageSize: number = 10,
+    user: UserContext,
   ): Promise<{ list: AuditLog[]; total: number; page: number; pageSize: number }> {
-    return this.findAll({ startTime, endTime, page, pageSize });
+    return this.findAll({ startTime, endTime, page, pageSize }, user);
   }
 
-  async exportLogs(options: AuditLogExportOptions): Promise<string> {
+  async exportLogs(options: AuditLogExportOptions, user: UserContext): Promise<string> {
     const { module, action, userId, username, startTime, endTime, success } =
       options;
 
-    const where: FindOptionsWhere<AuditLog> = {};
+    const queryBuilder = this.auditLogRepository.createQueryBuilder('auditLog');
 
-    if (module) where.module = module;
-    if (action) where.action = action;
-    if (userId) where.userId = userId;
-    if (username) where.username = username;
-    if (success !== undefined) where.success = success;
-    if (startTime && endTime) {
-      where.createdAt = Between(new Date(startTime), new Date(endTime));
+    if (this.isCompanyAdmin(user)) {
+      queryBuilder.innerJoin('users', 'user', 'auditLog.userId = user.id');
+      queryBuilder.andWhere('user.companyId = :companyId', { companyId: user.companyId });
     }
 
-    const logs = await this.auditLogRepository.find({
-      where,
-      order: { createdAt: 'DESC' },
-    });
+    if (module) queryBuilder.andWhere('auditLog.module = :module', { module });
+    if (action) queryBuilder.andWhere('auditLog.action = :action', { action });
+    if (userId) queryBuilder.andWhere('auditLog.userId = :userId', { userId });
+    if (username) queryBuilder.andWhere('auditLog.username = :username', { username });
+    if (success !== undefined) queryBuilder.andWhere('auditLog.success = :success', { success });
+    if (startTime && endTime) {
+      queryBuilder.andWhere('auditLog.createdAt BETWEEN :startTime AND :endTime', {
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+      });
+    }
+
+    queryBuilder.orderBy('auditLog.createdAt', 'DESC');
+
+    const logs = await queryBuilder.getMany();
 
     const headers = [
       'ID',

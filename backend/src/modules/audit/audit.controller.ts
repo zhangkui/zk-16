@@ -5,6 +5,7 @@ import {
   UseGuards,
   Res,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -13,7 +14,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuditService } from './audit.service';
 import { QueryAuditLogDto } from './audit.dto';
 import { AuditLog, AuditModule, AuditAction } from './audit.entity';
@@ -21,13 +22,14 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import * as dayjs from 'dayjs';
 
 @ApiTags('审计日志')
+@ApiBearerAuth()
 @Controller('audit')
+@UseGuards(JwtAuthGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @Get('logs')
   @ApiOperation({ summary: '分页查询审计日志' })
-  @ApiBearerAuth()
   @ApiQuery({ name: 'page', required: false, description: '页码', type: Number })
   @ApiQuery({
     name: 'pageSize',
@@ -61,16 +63,16 @@ export class AuditController {
   })
   @ApiQuery({ name: 'success', required: false, description: '是否成功' })
   @ApiResponse({ status: 200, description: '查询成功' })
-  @UseGuards(JwtAuthGuard)
   async findAll(
     @Query() queryDto: QueryAuditLogDto,
+    @Req() req: Request,
   ): Promise<{ list: AuditLog[]; total: number; page: number; pageSize: number }> {
-    return this.auditService.findAll(queryDto);
+    const user = (req as any).user;
+    return this.auditService.findAll(queryDto, user);
   }
 
   @Get('logs/export')
   @ApiOperation({ summary: '导出审计日志' })
-  @ApiBearerAuth()
   @ApiQuery({
     name: 'module',
     required: false,
@@ -96,12 +98,13 @@ export class AuditController {
     description: '结束时间',
   })
   @ApiQuery({ name: 'success', required: false, description: '是否成功' })
-  @UseGuards(JwtAuthGuard)
   async exportLogs(
     @Query() queryDto: QueryAuditLogDto,
     @Res() res: Response,
+    @Req() req: Request,
   ): Promise<void> {
-    const csvContent = await this.auditService.exportLogs(queryDto);
+    const user = (req as any).user;
+    const csvContent = await this.auditService.exportLogs(queryDto, user);
 
     const filename = `audit-logs-${dayjs().format('YYYYMMDD-HHmmss')}.csv`;
 

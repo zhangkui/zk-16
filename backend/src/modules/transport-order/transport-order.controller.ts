@@ -9,6 +9,8 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,7 +18,10 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Request } from 'express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TransportOrderService } from './transport-order.service';
 import {
   CreateTransportOrderDto,
@@ -30,7 +35,9 @@ import {
 import { TransportOrder } from './transport-order.entity';
 
 @ApiTags('运输单管理')
+@ApiBearerAuth()
 @Controller('transport-orders')
+@UseGuards(JwtAuthGuard)
 export class TransportOrderController {
   constructor(private readonly transportOrderService: TransportOrderService) {}
 
@@ -40,8 +47,9 @@ export class TransportOrderController {
   @ApiResponse({ status: 404, description: '车辆或围栏不存在' })
   @ApiResponse({ status: 400, description: '围栏类型不正确' })
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createTransportOrderDto: CreateTransportOrderDto): Promise<TransportOrder> {
-    return this.transportOrderService.create(createTransportOrderDto);
+  create(@Body() createTransportOrderDto: CreateTransportOrderDto, @Req() req: Request): Promise<TransportOrder> {
+    const user = (req as any).user;
+    return this.transportOrderService.create(createTransportOrderDto, user);
   }
 
   @Get()
@@ -49,8 +57,10 @@ export class TransportOrderController {
   @ApiResponse({ status: 200, description: '查询成功' })
   findAll(
     @Query() queryTransportOrderDto: QueryTransportOrderDto,
+    @Req() req: Request,
   ): Promise<{ data: TransportOrder[]; total: number; page: number; pageSize: number }> {
-    return this.transportOrderService.findAll(queryTransportOrderDto);
+    const user = (req as any).user;
+    return this.transportOrderService.findAll(queryTransportOrderDto, user);
   }
 
   @Get('order-no/:orderNo')
@@ -58,16 +68,18 @@ export class TransportOrderController {
   @ApiParam({ name: 'orderNo', description: '运输单号' })
   @ApiResponse({ status: 200, description: '查询成功', type: TransportOrder })
   @ApiResponse({ status: 404, description: '运输单不存在' })
-  findByOrderNo(@Param('orderNo') orderNo: string): Promise<TransportOrder> {
-    return this.transportOrderService.findByOrderNo(orderNo);
+  findByOrderNo(@Param('orderNo') orderNo: string, @Req() req: Request): Promise<TransportOrder> {
+    const user = (req as any).user;
+    return this.transportOrderService.findByOrderNo(orderNo, user);
   }
 
   @Get('vehicle/:vehicleId/active')
   @ApiOperation({ summary: '查询车辆正在进行中的运输单', description: '获取指定车辆所有未完成的运输单' })
   @ApiParam({ name: 'vehicleId', description: '车辆ID(UUID)' })
   @ApiResponse({ status: 200, description: '查询成功' })
-  findActiveOrdersByVehicle(@Param('vehicleId') vehicleId: string): Promise<TransportOrder[]> {
-    return this.transportOrderService.findActiveOrdersByVehicle(vehicleId);
+  findActiveOrdersByVehicle(@Param('vehicleId') vehicleId: string, @Req() req: Request): Promise<TransportOrder[]> {
+    const user = (req as any).user;
+    return this.transportOrderService.findActiveOrdersByVehicle(vehicleId, user);
   }
 
   @Get(':id')
@@ -75,8 +87,9 @@ export class TransportOrderController {
   @ApiParam({ name: 'id', description: '运输单ID(UUID)' })
   @ApiResponse({ status: 200, description: '查询成功', type: TransportOrder })
   @ApiResponse({ status: 404, description: '运输单不存在' })
-  findOne(@Param('id') id: string): Promise<TransportOrder> {
-    return this.transportOrderService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: Request): Promise<TransportOrder> {
+    const user = (req as any).user;
+    return this.transportOrderService.findOne(id, user);
   }
 
   @Patch(':id/status')
@@ -88,8 +101,10 @@ export class TransportOrderController {
   updateStatus(
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateStatusDto,
+    @Req() req: Request,
   ): Promise<TransportOrder> {
-    return this.transportOrderService.updateStatus(id, updateStatusDto);
+    const user = (req as any).user;
+    return this.transportOrderService.updateStatus(id, updateStatusDto, user);
   }
 
   @Patch(':id/deviation')
@@ -101,8 +116,10 @@ export class TransportOrderController {
   recordDeviation(
     @Param('id') id: string,
     @Body() recordDeviationDto: RecordDeviationDto,
+    @Req() req: Request,
   ): Promise<TransportOrder> {
-    return this.transportOrderService.recordDeviation(id, recordDeviationDto);
+    const user = (req as any).user;
+    return this.transportOrderService.recordDeviation(id, recordDeviationDto, user);
   }
 
   @Patch(':id/complete')
@@ -114,8 +131,10 @@ export class TransportOrderController {
   complete(
     @Param('id') id: string,
     @Body() body?: CompleteTransportOrderDto,
+    @Req() req?: Request,
   ): Promise<TransportOrder> {
-    return this.transportOrderService.complete(id, body?.actualWeight);
+    const user = (req as any).user;
+    return this.transportOrderService.complete(id, user, body?.actualWeight);
   }
 
   @Patch(':id/cancel')
@@ -127,8 +146,10 @@ export class TransportOrderController {
   cancel(
     @Param('id') id: string,
     @Body() body?: CancelTransportOrderDto,
+    @Req() req?: Request,
   ): Promise<TransportOrder> {
-    return this.transportOrderService.cancel(id, body?.remark);
+    const user = (req as any).user;
+    return this.transportOrderService.cancel(id, user, body?.remark);
   }
 
   @Patch(':id')
@@ -139,8 +160,10 @@ export class TransportOrderController {
   update(
     @Param('id') id: string,
     @Body() updateTransportOrderDto: UpdateTransportOrderDto,
+    @Req() req: Request,
   ): Promise<TransportOrder> {
-    return this.transportOrderService.update(id, updateTransportOrderDto);
+    const user = (req as any).user;
+    return this.transportOrderService.update(id, updateTransportOrderDto, user);
   }
 
   @Delete(':id')
@@ -149,7 +172,8 @@ export class TransportOrderController {
   @ApiParam({ name: 'id', description: '运输单ID(UUID)' })
   @ApiResponse({ status: 204, description: '删除成功' })
   @ApiResponse({ status: 404, description: '运输单不存在' })
-  remove(@Param('id') id: string): Promise<void> {
-    return this.transportOrderService.remove(id);
+  remove(@Param('id') id: string, @Req() req: Request): Promise<void> {
+    const user = (req as any).user;
+    return this.transportOrderService.remove(id, user);
   }
 }

@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createHash } from 'crypto';
 import { createReadStream, existsSync } from 'fs';
 import { Evidence, EvidenceStatus } from './evidence.entity';
+import { Vehicle } from '../vehicle/vehicle.entity';
+import { UserRole } from '../auth/user.entity';
 import {
   CreateEvidenceDto,
   QueryEvidenceDto,
@@ -11,14 +13,45 @@ import {
   VerifyEvidenceDto,
 } from './evidence.dto';
 
+interface UserContext {
+  id: string;
+  role: string;
+  companyId?: string;
+  isCompanySuperAdmin?: boolean;
+}
+
 @Injectable()
 export class EvidenceService {
   constructor(
     @InjectRepository(Evidence)
     private readonly evidenceRepository: Repository<Evidence>,
+    @InjectRepository(Vehicle)
+    private readonly vehicleRepository: Repository<Vehicle>,
   ) {}
 
-  async create(createEvidenceDto: CreateEvidenceDto): Promise<Evidence> {
+  private isCompanyAdmin(user: UserContext): boolean {
+    return (
+      user.role === UserRole.COMPANY_SUPER_ADMIN ||
+      user.role === UserRole.COMPANY_ADMIN
+    );
+  }
+
+  private async getCompanyPlateNumbers(user: UserContext): Promise<string[]> {
+    if (!this.isCompanyAdmin(user)) return [];
+    const vehicles = await this.vehicleRepository.find({
+      where: { companyId: user.companyId },
+      select: ['plateNumber'],
+    });
+    return vehicles.map((v) => v.plateNumber);
+  }
+
+  async create(createEvidenceDto: CreateEvidenceDto, user: UserContext): Promise<Evidence> {
+    if (this.isCompanyAdmin(user)) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: createEvidenceDto.plateNumber } });
+      if (!vehicle || vehicle.companyId !== user.companyId) {
+        throw new ForbiddenException('无权为非本公司车辆创建证据');
+      }
+    }
     const evidence = this.evidenceRepository.create({
       ...createEvidenceDto,
       status: EvidenceStatus.COLLECTING,
@@ -28,11 +61,20 @@ export class EvidenceService {
 
   async findAll(
     queryEvidenceDto: QueryEvidenceDto,
+    user: UserContext,
   ): Promise<{ data: Evidence[]; total: number; page: number; pageSize: number }> {
     const { alertId, transportOrderId, plateNumber, type, status, page = 1, pageSize = 10 } =
       queryEvidenceDto;
 
     const queryBuilder = this.evidenceRepository.createQueryBuilder('evidence');
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return { data: [], total: 0, page, pageSize };
+      }
+      queryBuilder.andWhere('evidence.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+    }
 
     if (alertId) {
       queryBuilder.andWhere('evidence.alertId = :alertId', { alertId });
@@ -70,19 +112,36 @@ export class EvidenceService {
     };
   }
 
-  async findOne(id: string): Promise<Evidence> {
+  async findOne(id: string, user: UserContext): Promise<Evidence> {
     const evidence = await this.evidenceRepository.findOne({ where: { id } });
     if (!evidence) {
       throw new NotFoundException(`证据ID ${id} 不存在`);
     }
+
+    if (this.isCompanyAdmin(user)) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber: evidence.plateNumber } });
+      if (!vehicle || vehicle.companyId !== user.companyId) {
+        throw new ForbiddenException('无权访问该证据信息');
+      }
+    }
+
     return evidence;
   }
 
-  async getEvidencesByAlertId(alertId: string): Promise<Evidence[]> {
-    return this.evidenceRepository.find({
-      where: { alertId },
-      order: { createdAt: 'DESC' },
-    });
+  async getEvidencesByAlertId(alertId: string, user: UserContext): Promise<Evidence[]> {
+    const queryBuilder = this.evidenceRepository.createQueryBuilder('evidence');
+    queryBuilder.where('evidence.alertId = :alertId', { alertId });
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return [];
+      }
+      queryBuilder.andWhere('evidence.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
+    }
+
+    queryBuilder.orderBy('evidence.createdAt', 'DESC');
+    return queryBuilder.getMany();
   }
 
   private async calculateFileHash(filePath: string): Promise<string> {
@@ -100,8 +159,8 @@ export class EvidenceService {
     });
   }
 
-  async fixEvidence(id: string, fixEvidenceDto: FixEvidenceDto): Promise<Evidence> {
-    const evidence = await this.findOne(id);
+  async fixEvidence(id: string, fixEvidenceDto: FixEvidenceDto, user: UserContext): Promise<Evidence> {
+    const evidence = await this.findOne(id, user);
 
     if (evidence.status !== EvidenceStatus.COLLECTING) {
       throw new BadRequestException('只有采集中的证据才能进行固化操作');
@@ -122,8 +181,8 @@ export class EvidenceService {
     return this.evidenceRepository.save(evidence);
   }
 
-  async verifyEvidence(id: string, verifyEvidenceDto: VerifyEvidenceDto): Promise<Evidence> {
-    const evidence = await this.findOne(id);
+  async verifyEvidence(id: string, verifyEvidenceDto: VerifyEvidenceDto, user: UserContext): Promise<Evidence> {
+    const evidence = await this.findOne(id, user);
 
     if (evidence.status !== EvidenceStatus.FIXED) {
       throw new BadRequestException('只有已固化的证据才能进行审核操作');
@@ -137,8 +196,8 @@ export class EvidenceService {
     return this.evidenceRepository.save(evidence);
   }
 
-  async archiveEvidence(id: string): Promise<Evidence> {
-    const evidence = await this.findOne(id);
+  async archiveEvidence(id: string, user: UserContext): Promise<Evidence> {
+    const evidence = await this.findOne(id, user);
 
     if (evidence.status !== EvidenceStatus.VERIFIED) {
       throw new BadRequestException('只有已审核的证据才能进行归档操作');

@@ -9,13 +9,18 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Request } from 'express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DisposalReceiptService } from './disposal-receipt.service';
 import {
   CreateDisposalReceiptDto,
@@ -26,7 +31,9 @@ import {
 import { DisposalReceipt } from './disposal-receipt.entity';
 
 @ApiTags('处置联单管理')
+@ApiBearerAuth()
 @Controller('disposal-receipts')
+@UseGuards(JwtAuthGuard)
 export class DisposalReceiptController {
   constructor(private readonly disposalReceiptService: DisposalReceiptService) {}
 
@@ -44,21 +51,24 @@ export class DisposalReceiptController {
   @ApiResponse({ status: 200, description: '查询成功' })
   findAll(
     @Query() queryDisposalReceiptDto: QueryDisposalReceiptDto,
+    @Req() req: Request,
   ): Promise<{ data: DisposalReceipt[]; total: number; page: number; pageSize: number }> {
-    return this.disposalReceiptService.findAll(queryDisposalReceiptDto);
+    const user = (req as any).user;
+    return this.disposalReceiptService.findAll(queryDisposalReceiptDto, user);
   }
 
   @Get('unmatched')
   @ApiOperation({ summary: '获取待匹配联单列表', description: '查询所有状态为待匹配(pending)的处置联单' })
   @ApiResponse({ status: 200, description: '查询成功', type: [DisposalReceipt] })
-  getUnmatchedReceipts(): Promise<DisposalReceipt[]> {
-    return this.disposalReceiptService.getUnmatchedReceipts();
+  getUnmatchedReceipts(@Req() req: Request): Promise<DisposalReceipt[]> {
+    const user = (req as any).user;
+    return this.disposalReceiptService.getUnmatchedReceipts(user);
   }
 
   @Get('statistics')
   @ApiOperation({ summary: '获取匹配统计', description: '统计联单总数、待匹配数、已匹配数、不匹配数、已过期数及匹配率' })
   @ApiResponse({ status: 200, description: '查询成功' })
-  getMatchStatistics(): Promise<{
+  getMatchStatistics(@Req() req: Request): Promise<{
     total: number;
     pending: number;
     matched: number;
@@ -66,7 +76,8 @@ export class DisposalReceiptController {
     expired: number;
     matchRate: number;
   }> {
-    return this.disposalReceiptService.getMatchStatistics();
+    const user = (req as any).user;
+    return this.disposalReceiptService.getMatchStatistics(user);
   }
 
   @Get('receipt-no/:receiptNo')
@@ -74,8 +85,9 @@ export class DisposalReceiptController {
   @ApiParam({ name: 'receiptNo', description: '联单编号' })
   @ApiResponse({ status: 200, description: '查询成功', type: DisposalReceipt })
   @ApiResponse({ status: 404, description: '联单不存在' })
-  findByReceiptNo(@Param('receiptNo') receiptNo: string): Promise<DisposalReceipt> {
-    return this.disposalReceiptService.findByReceiptNo(receiptNo);
+  findByReceiptNo(@Param('receiptNo') receiptNo: string, @Req() req: Request): Promise<DisposalReceipt> {
+    const user = (req as any).user;
+    return this.disposalReceiptService.findByReceiptNo(receiptNo, user);
   }
 
   @Get(':id')
@@ -83,8 +95,9 @@ export class DisposalReceiptController {
   @ApiParam({ name: 'id', description: '联单ID(UUID)' })
   @ApiResponse({ status: 200, description: '查询成功', type: DisposalReceipt })
   @ApiResponse({ status: 404, description: '联单不存在' })
-  findOne(@Param('id') id: string): Promise<DisposalReceipt> {
-    return this.disposalReceiptService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: Request): Promise<DisposalReceipt> {
+    const user = (req as any).user;
+    return this.disposalReceiptService.findOne(id, user);
   }
 
   @Patch(':id/match')
@@ -96,8 +109,10 @@ export class DisposalReceiptController {
   matchReceipt(
     @Param('id') id: string,
     @Body() matchReceiptDto: MatchReceiptDto,
+    @Req() req: Request,
   ): Promise<DisposalReceipt> {
-    return this.disposalReceiptService.matchReceipt(id, matchReceiptDto);
+    const user = (req as any).user;
+    return this.disposalReceiptService.matchReceipt(id, matchReceiptDto, user);
   }
 
   @Patch(':id')
@@ -109,8 +124,10 @@ export class DisposalReceiptController {
   update(
     @Param('id') id: string,
     @Body() updateDisposalReceiptDto: UpdateDisposalReceiptDto,
+    @Req() req: Request,
   ): Promise<DisposalReceipt> {
-    return this.disposalReceiptService.update(id, updateDisposalReceiptDto);
+    const user = (req as any).user;
+    return this.disposalReceiptService.update(id, updateDisposalReceiptDto, user);
   }
 
   @Delete(':id')
@@ -119,7 +136,8 @@ export class DisposalReceiptController {
   @ApiParam({ name: 'id', description: '联单ID(UUID)' })
   @ApiResponse({ status: 204, description: '删除成功' })
   @ApiResponse({ status: 404, description: '联单不存在' })
-  remove(@Param('id') id: string): Promise<void> {
-    return this.disposalReceiptService.remove(id);
+  remove(@Param('id') id: string, @Req() req: Request): Promise<void> {
+    const user = (req as any).user;
+    return this.disposalReceiptService.remove(id, user);
   }
 }

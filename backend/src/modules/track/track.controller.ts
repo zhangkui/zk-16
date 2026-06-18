@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import { Request } from 'express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TrackService } from './track.service';
 import {
   CreateTrackPointDto,
@@ -10,7 +12,9 @@ import {
 import { TrackPoint } from './track.entity';
 
 @ApiTags('轨迹管理')
+@ApiBearerAuth()
 @Controller('track')
+@UseGuards(JwtAuthGuard)
 export class TrackController {
   constructor(private readonly trackService: TrackService) {}
 
@@ -42,8 +46,10 @@ export class TrackController {
   getTrackByOrderId(
     @Param('transportOrderId') transportOrderId: string,
     @Query() queryTrackDto: QueryTrackDto,
+    @Req() req: Request,
   ): Promise<{ data: TrackPoint[]; total: number; page: number; pageSize: number }> {
-    return this.trackService.getTrackByOrderId(transportOrderId, queryTrackDto);
+    const user = (req as any).user;
+    return this.trackService.getTrackByOrderId(transportOrderId, queryTrackDto, user);
   }
 
   @Get()
@@ -51,8 +57,10 @@ export class TrackController {
   @ApiResponse({ status: 200, description: '查询成功' })
   queryTrack(
     @Query() queryTrackDto: QueryTrackDto,
+    @Req() req: Request,
   ): Promise<{ data: TrackPoint[]; total: number; page: number; pageSize: number }> {
-    return this.trackService.queryTrack(queryTrackDto);
+    const user = (req as any).user;
+    return this.trackService.queryTrack(queryTrackDto, user);
   }
 
   @Get('latest/:plateNumber')
@@ -60,8 +68,9 @@ export class TrackController {
   @ApiParam({ name: 'plateNumber', description: '车牌号' })
   @ApiResponse({ status: 200, description: '查询成功' })
   @ApiResponse({ status: 404, description: '未找到轨迹数据' })
-  getLatestPosition(@Param('plateNumber') plateNumber: string): Promise<any> {
-    return this.trackService.getLatestPosition(plateNumber);
+  getLatestPosition(@Param('plateNumber') plateNumber: string, @Req() req: Request): Promise<any> {
+    const user = (req as any).user;
+    return this.trackService.getLatestPosition(plateNumber, user);
   }
 
   @Post('latest/batch')
@@ -71,7 +80,9 @@ export class TrackController {
   @HttpCode(HttpStatus.OK)
   getLatestPositionsByVehicles(
     @Body() queryDto: QueryLatestPositionsDto,
+    @Req() req: Request,
   ): Promise<any[]> {
-    return this.trackService.getLatestPositionsByVehicles(queryDto);
+    const user = (req as any).user;
+    return this.trackService.getLatestPositionsByVehicles(queryDto, user);
   }
 }

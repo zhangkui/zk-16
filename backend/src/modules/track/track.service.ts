@@ -1,10 +1,12 @@
-import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw, Between, FindOptionsWhere, In, Brackets } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { TrackPoint } from './track.entity';
 import { TransportOrder, TransportOrderStatus } from '../transport-order/transport-order.entity';
+import { Vehicle } from '../vehicle/vehicle.entity';
+import { UserRole } from '../auth/user.entity';
 import { CreateTrackPointDto, QueryTrackDto, QueryLatestPositionsDto } from './track.dto';
 import { KafkaService } from '../../kafka/kafka.service';
 import { AlertType, AlertLevel, Alert, AlertStatus } from '../alert/alert.entity';
@@ -12,6 +14,13 @@ import { Fence, FenceStatus, FenceType } from '../fence/fence.entity';
 import { point, lineString } from '@turf/helpers';
 import pointToLineDistance from '@turf/point-to-line-distance';
 import { GeoHelper } from '../../common/helpers/geo.helper';
+
+interface UserContext {
+  id: string;
+  role: string;
+  companyId?: string;
+  isCompanySuperAdmin?: boolean;
+}
 
 interface LatestPosition {
   plateNumber: string;
@@ -44,9 +53,27 @@ export class TrackService {
     private readonly fenceRepository: Repository<Fence>,
     @InjectRepository(Alert)
     private readonly alertRepository: Repository<Alert>,
+    @InjectRepository(Vehicle)
+    private readonly vehicleRepository: Repository<Vehicle>,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private readonly kafkaService: KafkaService,
   ) {}
+
+  private isCompanyAdmin(user: UserContext): boolean {
+    return (
+      user.role === UserRole.COMPANY_SUPER_ADMIN ||
+      user.role === UserRole.COMPANY_ADMIN
+    );
+  }
+
+  private async getCompanyPlateNumbers(user: UserContext): Promise<string[]> {
+    if (!this.isCompanyAdmin(user)) return [];
+    const vehicles = await this.vehicleRepository.find({
+      where: { companyId: user.companyId },
+      select: ['plateNumber'],
+    });
+    return vehicles.map((v) => v.plateNumber);
+  }
 
   private getCacheKey(plateNumber: string): string {
     return `${this.LATEST_POSITION_KEY_PREFIX}${plateNumber}`;
@@ -366,27 +393,40 @@ export class TrackService {
   async getTrackByOrderId(
     transportOrderId: string,
     queryTrackDto: QueryTrackDto,
+    user: UserContext,
   ): Promise<{ data: TrackPoint[]; total: number; page: number; pageSize: number }> {
     const { timeFrom, timeTo, page = 1, pageSize = 100 } = queryTrackDto;
 
-    const where: FindOptionsWhere<TrackPoint> = { transportOrderId };
+    const queryBuilder = this.trackPointRepository.createQueryBuilder('track');
+    queryBuilder.where('track.transportOrderId = :transportOrderId', { transportOrderId });
 
-    if (timeFrom && timeTo) {
-      where.timestamp = Between(new Date(timeFrom), new Date(timeTo));
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return { data: [], total: 0, page, pageSize };
+      }
+      queryBuilder.andWhere('track.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
     }
 
-    const [data, total] = await this.trackPointRepository.findAndCount({
-      where,
-      order: { timestamp: 'ASC' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    });
+    if (timeFrom && timeTo) {
+      queryBuilder.andWhere('track.timestamp BETWEEN :timeFrom AND :timeTo', {
+        timeFrom: new Date(timeFrom),
+        timeTo: new Date(timeTo),
+      });
+    }
+
+    queryBuilder.orderBy('track.timestamp', 'ASC');
+    queryBuilder.skip((page - 1) * pageSize);
+    queryBuilder.take(pageSize);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
 
     return { data, total, page, pageSize };
   }
 
   async queryTrack(
     queryTrackDto: QueryTrackDto,
+    user: UserContext,
   ): Promise<{ data: TrackPoint[]; total: number; page: number; pageSize: number }> {
     const { transportOrderId, plateNumber, timeFrom, timeTo, page = 1, pageSize = 100 } = queryTrackDto;
 
@@ -398,6 +438,14 @@ export class TrackService {
 
     if (plateNumber) {
       queryBuilder.andWhere('track.plateNumber = :plateNumber', { plateNumber });
+    }
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      if (companyPlateNumbers.length === 0) {
+        return { data: [], total: 0, page, pageSize };
+      }
+      queryBuilder.andWhere('track.plateNumber IN (:...plateNumbers)', { plateNumbers: companyPlateNumbers });
     }
 
     if (timeFrom) {
@@ -417,7 +465,14 @@ export class TrackService {
     return { data, total, page, pageSize };
   }
 
-  async getLatestPosition(plateNumber: string): Promise<LatestPosition> {
+  async getLatestPosition(plateNumber: string, user: UserContext): Promise<LatestPosition> {
+    if (this.isCompanyAdmin(user)) {
+      const vehicle = await this.vehicleRepository.findOne({ where: { plateNumber } });
+      if (!vehicle || vehicle.companyId !== user.companyId) {
+        throw new ForbiddenException('无权访问该车辆轨迹数据');
+      }
+    }
+
     const cached = await this.getCachedLatestPosition(plateNumber);
     if (cached) {
       return cached;
@@ -452,13 +507,20 @@ export class TrackService {
 
   async getLatestPositionsByVehicles(
     queryDto: QueryLatestPositionsDto,
+    user: UserContext,
   ): Promise<LatestPosition[]> {
-    const { plateNumbers } = queryDto;
+    let { plateNumbers } = queryDto;
+
+    if (this.isCompanyAdmin(user)) {
+      const companyPlateNumbers = await this.getCompanyPlateNumbers(user);
+      plateNumbers = plateNumbers.filter((p) => companyPlateNumbers.includes(p));
+    }
+
     const results: LatestPosition[] = [];
 
     for (const plateNumber of plateNumbers) {
       try {
-        const position = await this.getLatestPosition(plateNumber);
+        const position = await this.getLatestPosition(plateNumber, user);
         results.push(position);
       } catch (error) {
         this.logger.warn(`获取车辆 ${plateNumber} 最新位置失败: ${error.message}`);
