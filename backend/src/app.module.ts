@@ -18,6 +18,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SimulationModule } from './modules/simulation/simulation.module';
 import { CompanyModule } from './modules/company/company.module';
 import { MqttModule } from './mqtt/mqtt.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 
 @Module({
@@ -71,6 +72,7 @@ import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
     SimulationModule,
     CompanyModule,
     MqttModule,
+    RealtimeModule,
   ],
   providers: [
     {

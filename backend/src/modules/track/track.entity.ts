@@ -15,7 +15,7 @@ export class TrackPoint {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', comment: '运输单ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '运输单ID' })
   transportOrderId: string;
 
   @ManyToOne(() => TransportOrder)

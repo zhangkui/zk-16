@@ -130,6 +130,7 @@ export const trackApi = {
   list: (params?: any) => api.get('/track', { params }),
   getLatestPosition: (plateNumber: string) => api.get(`/track/latest/${plateNumber}`),
   getLatestPositions: (params?: any) => api.post('/track/latest/batch', params),
+  getMonitoringPositions: () => api.get('/track/monitoring/positions'),
 };
 
 export const alertApi = {

@@ -1,8 +1,9 @@
 import { Injectable, Inject, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Raw, Between, FindOptionsWhere, In, Brackets } from 'typeorm';
+import { Repository, Between, FindOptionsWhere, In, Brackets } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TrackPoint } from './track.entity';
 import { TransportOrder, TransportOrderStatus } from '../transport-order/transport-order.entity';
 import { Vehicle } from '../vehicle/vehicle.entity';
@@ -57,6 +58,7 @@ export class TrackService {
     private readonly vehicleRepository: Repository<Vehicle>,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private readonly kafkaService: KafkaService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private isCompanyAdmin(user: UserContext): boolean {
@@ -318,16 +320,31 @@ export class TrackService {
       deviationDistance = deviationResult.deviationDistance;
     }
 
-    const trackPoint = this.trackPointRepository.create({
-      ...createTrackPointDto,
-      timestamp: new Date(timestamp),
-      transportOrderId: transportOrder?.id,
-      location: Raw(() => GeoHelper.makePoint(longitude, latitude)),
-      isDeviated,
-      deviationDistance,
-    } as any);
+    const insertQb = this.trackPointRepository
+      .createQueryBuilder()
+      .insert()
+      .into(TrackPoint)
+      .values({
+        plateNumber,
+        gpsDeviceId: createTrackPointDto.gpsDeviceId,
+        longitude,
+        latitude,
+        speed: createTrackPointDto.speed,
+        direction: createTrackPointDto.direction,
+        altitude: createTrackPointDto.altitude,
+        accuracy: createTrackPointDto.accuracy,
+        isDeviated,
+        deviationDistance,
+        timestamp: new Date(timestamp),
+        transportOrderId: transportOrder?.id,
+        location: () => `ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)`,
+      })
+      .setParameter('lng', longitude)
+      .setParameter('lat', latitude)
+      .returning('*');
 
-    const savedPoint = await this.trackPointRepository.save(trackPoint) as unknown as TrackPoint;
+    const insertResult = await insertQb.execute();
+    const savedPoint = (insertResult.generatedMaps[0] || insertResult.identifiers[0]) as unknown as TrackPoint;
 
     const latestPosition: LatestPosition = {
       plateNumber,
@@ -343,6 +360,8 @@ export class TrackService {
       transportOrderId: transportOrder?.id,
     };
     await this.cacheLatestPosition(plateNumber, latestPosition);
+
+    this.emitTrackPointEvent(latestPosition, createTrackPointDto, transportOrder);
 
     try {
       await this.kafkaService.sendTrackPoint({
@@ -525,6 +544,134 @@ export class TrackService {
       } catch (error) {
         this.logger.warn(`获取车辆 ${plateNumber} 最新位置失败: ${error.message}`);
       }
+    }
+
+    return results;
+  }
+
+  private async getVehicleMonitorInfo(plateNumber: string): Promise<{
+    companyId?: string;
+    companyName?: string;
+    vehicleType?: string;
+    driverName?: string;
+    driverPhone?: string;
+    wasteType?: string;
+    vehicleStatus?: string;
+  } | null> {
+    try {
+      const cacheKey = `vehicle:info:${plateNumber}`;
+      const cached = await this.cacheManager.get<string>(cacheKey);
+      if (cached) return JSON.parse(cached);
+
+      const vehicle = await this.vehicleRepository.findOne({
+        where: { plateNumber },
+        select: [
+          'plateNumber',
+          'companyId',
+          'companyName',
+          'vehicleType',
+          'driverName',
+          'driverPhone',
+          'wasteType',
+          'status',
+        ],
+      });
+
+      const info = vehicle
+        ? {
+            companyId: vehicle.companyId,
+            companyName: vehicle.companyName,
+            vehicleType: vehicle.vehicleType,
+            driverName: vehicle.driverName,
+            driverPhone: vehicle.driverPhone,
+            wasteType: vehicle.wasteType,
+            vehicleStatus: vehicle.status,
+          }
+        : null;
+
+      if (info) {
+        await this.cacheManager.set(cacheKey, JSON.stringify(info), 600);
+      }
+      return info;
+    } catch (error) {
+      this.logger.error(`获取车辆信息失败 ${plateNumber}:`, error);
+      return null;
+    }
+  }
+
+  private emitTrackPointEvent(
+    position: LatestPosition,
+    dto: CreateTrackPointDto,
+    transportOrder: TransportOrder | null,
+  ): void {
+    if (!this.eventEmitter) return;
+
+    const timestampIso = new Date(position.timestamp).toISOString();
+
+    setImmediate(async () => {
+      try {
+        const vehicleInfo = await this.getVehicleMonitorInfo(position.plateNumber);
+
+        this.eventEmitter.emit('track.point.created', {
+          plateNumber: position.plateNumber,
+          longitude: Number(position.longitude),
+          latitude: Number(position.latitude),
+          speed: Number(position.speed ?? dto.speed ?? 0),
+          direction: Number(position.direction ?? dto.direction ?? 0),
+          altitude: Number(position.altitude ?? dto.altitude ?? 0),
+          accuracy: Number(position.accuracy ?? dto.accuracy ?? 0),
+          timestamp: timestampIso,
+          isDeviated: position.isDeviated,
+          deviationDistance: Number(position.deviationDistance ?? 0),
+          transportOrderId: position.transportOrderId ?? transportOrder?.id,
+          companyId: vehicleInfo?.companyId,
+          companyName: vehicleInfo?.companyName,
+          vehicleType: vehicleInfo?.vehicleType,
+          driverName: vehicleInfo?.driverName,
+          driverPhone: vehicleInfo?.driverPhone,
+          wasteType: vehicleInfo?.wasteType,
+          vehicleStatus: vehicleInfo?.vehicleStatus,
+        });
+      } catch (error) {
+        this.logger.error(`推送实时车辆位置失败 ${position.plateNumber}:`, error);
+      }
+    });
+  }
+
+  async getMonitoringPositions(user: UserContext): Promise<any[]> {
+    const vehicleQb = this.vehicleRepository.createQueryBuilder('vehicle');
+
+    if (this.isCompanyAdmin(user)) {
+      vehicleQb.where('vehicle.companyId = :companyId', { companyId: user.companyId });
+    }
+
+    const vehicles = await vehicleQb.getMany();
+    const results: any[] = [];
+
+    for (const vehicle of vehicles) {
+      const position = await this.getCachedLatestPosition(vehicle.plateNumber);
+      if (!position) continue;
+
+      results.push({
+        plateNumber: position.plateNumber,
+        longitude: Number(position.longitude),
+        latitude: Number(position.latitude),
+        speed: Number(position.speed ?? 0),
+        direction: Number(position.direction ?? 0),
+        altitude: Number(position.altitude ?? 0),
+        accuracy: Number(position.accuracy ?? 0),
+        timestamp: new Date(position.timestamp).toISOString(),
+        isDeviated: position.isDeviated,
+        deviationDistance: Number(position.deviationDistance ?? 0),
+        transportOrderId: position.transportOrderId,
+        companyId: vehicle.companyId,
+        companyName: vehicle.companyName,
+        vehicleType: vehicle.vehicleType,
+        driverName: vehicle.driverName,
+        driverPhone: vehicle.driverPhone,
+        wasteType: vehicle.wasteType,
+        vehicleStatus: vehicle.status,
+      });
     }
 
     return results;

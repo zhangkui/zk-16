@@ -20,6 +20,7 @@ import {
   BellOutlined,
   BankOutlined,
   TeamOutlined,
+  MonitorOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
@@ -29,6 +30,7 @@ const allMenuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘', roles: ['admin', 'supervision', 'department_auditor', 'transport_enterprise', 'company_super_admin', 'company_admin'] },
   { key: '/companies', icon: <BankOutlined />, label: '公司管理', roles: ['admin'] },
   { key: '/vehicles', icon: <CarOutlined />, label: '车辆备案', roles: ['admin', 'supervision', 'department_auditor', 'transport_enterprise', 'company_super_admin', 'company_admin'] },
+  { key: '/vehicle-monitor', icon: <MonitorOutlined />, label: '车辆监控', roles: ['admin', 'supervision', 'department_auditor', 'company_super_admin', 'company_admin'] },
   { key: '/fences', icon: <BorderInnerOutlined />, label: '电子围栏', roles: ['admin', 'supervision', 'department_auditor', 'company_super_admin', 'company_admin'] },
   { key: '/transport-orders', icon: <FileTextOutlined />, label: '运输单', roles: ['admin', 'supervision', 'department_auditor', 'transport_enterprise', 'company_super_admin', 'company_admin'] },
   { key: '/track', icon: <EnvironmentOutlined />, label: '轨迹监控', roles: ['admin', 'supervision', 'department_auditor', 'company_super_admin', 'company_admin'] },

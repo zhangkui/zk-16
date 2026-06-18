@@ -85,4 +85,12 @@ export class TrackController {
     const user = (req as any).user;
     return this.trackService.getLatestPositionsByVehicles(queryDto, user);
   }
+
+  @Get('monitoring/positions')
+  @ApiOperation({ summary: '查询所有可见车辆最新位置（车辆监控）' })
+  @ApiResponse({ status: 200, description: '查询成功' })
+  getMonitoringPositions(@Req() req: Request): Promise<any[]> {
+    const user = (req as any).user;
+    return this.trackService.getMonitoringPositions(user);
+  }
 }
