@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 
 export enum VehicleStatus {
   PENDING = 'pending',
@@ -50,6 +51,10 @@ export class Vehicle {
 
   @Column({ type: 'varchar', length: 100, nullable: true, comment: '所属运输企业' })
   companyName: string;
+
+  @ApiProperty({ description: '所属公司ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '所属公司ID' })
+  companyId: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true, comment: '驾驶员姓名' })
   driverName: string;

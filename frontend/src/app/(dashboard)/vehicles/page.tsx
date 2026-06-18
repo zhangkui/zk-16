@@ -18,6 +18,7 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { vehicleApi } from '@/services/api';
+import { useAuthStore } from '@/store/auth';
 
 const { Option } = Select;
 
@@ -30,21 +31,15 @@ interface Vehicle {
   capacity: number;
   wasteType: string;
   company: string;
+  companyId?: string;
   status: 'pending' | 'approved' | 'rejected' | 'disabled';
   remark?: string;
   createdAt: string;
 }
 
-const mockVehicles: Vehicle[] = [
-  { id: '1', plateNumber: '京A12345', vehicleType: '厢式货车', driverName: '张三', driverPhone: '13800138001', capacity: 10, wasteType: 'HW08废矿物油', company: '环保运输有限公司', status: 'approved', createdAt: '2024-01-15 10:30:00' },
-  { id: '2', plateNumber: '京B67890', vehicleType: '罐式货车', driverName: '李四', driverPhone: '13800138002', capacity: 20, wasteType: 'HW06废有机溶剂', company: '绿色物流有限公司', status: 'pending', createdAt: '2024-01-16 14:20:00' },
-  { id: '3', plateNumber: '京C11111', vehicleType: '厢式货车', driverName: '王五', driverPhone: '13800138003', capacity: 8, wasteType: 'HW49其他废物', company: '环保运输有限公司', status: 'approved', createdAt: '2024-01-17 09:15:00' },
-  { id: '4', plateNumber: '京D22222', vehicleType: '自卸货车', driverName: '赵六', driverPhone: '13800138004', capacity: 15, wasteType: 'HW17表面处理废物', company: '清洁运输公司', status: 'rejected', remark: '资质证明已过期', createdAt: '2024-01-18 16:45:00' },
-  { id: '5', plateNumber: '京E33333', vehicleType: '罐式货车', driverName: '钱七', driverPhone: '13800138005', capacity: 25, wasteType: 'HW08废矿物油', company: '绿色物流有限公司', status: 'disabled', createdAt: '2024-01-19 11:00:00' },
-];
-
 export default function VehiclesPage() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles);
+  const { user } = useAuthStore();
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [approveModalVisible, setApproveModalVisible] = useState(false);
@@ -52,6 +47,9 @@ export default function VehiclesPage() {
   const [reviewingVehicle, setReviewingVehicle] = useState<Vehicle | null>(null);
   const [form] = Form.useForm();
   const [reviewForm] = Form.useForm();
+
+  const isCompanyAdmin = user?.role === 'company_super_admin' || user?.role === 'company_admin';
+  const canReview = user?.role === 'admin' || user?.role === 'supervision' || user?.role === 'department_auditor';
 
   useEffect(() => {
     fetchVehicles();
@@ -74,6 +72,9 @@ export default function VehiclesPage() {
   const handleAdd = () => {
     setEditingVehicle(null);
     form.resetFields();
+    if (isCompanyAdmin) {
+      form.setFieldsValue({ company: user?.company || '' });
+    }
     setModalVisible(true);
   };
 
@@ -168,7 +169,7 @@ export default function VehiclesPage() {
       fixed: 'right' as const,
       render: (_: any, record: Vehicle) => (
         <Space size="small">
-          {record.status === 'pending' && (
+          {canReview && record.status === 'pending' && (
             <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>
               审核
             </Button>
@@ -259,8 +260,8 @@ export default function VehiclesPage() {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="company" label="所属公司" rules={[{ required: true, message: '请输入所属公司' }]}>
-            <Input placeholder="请输入所属公司" />
+          <Form.Item name="company" label="所属公司" rules={isCompanyAdmin ? [] : [{ required: true, message: '请输入所属公司' }]}>
+            <Input placeholder="请输入所属公司" disabled={isCompanyAdmin} />
           </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={3} placeholder="请输入备注" />

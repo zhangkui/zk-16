@@ -6,7 +6,10 @@ interface User {
   id: string;
   username: string;
   name?: string;
+  realName?: string;
   role?: string;
+  companyId?: string;
+  isCompanySuperAdmin?: boolean;
   [key: string]: any;
 }
 

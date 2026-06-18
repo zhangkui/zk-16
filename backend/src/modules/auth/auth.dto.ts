@@ -115,5 +115,7 @@ export class LoginResponseDto {
     department: string;
     phone: string;
     email: string;
+    companyId?: string;
+    isCompanySuperAdmin?: boolean;
   };
 }

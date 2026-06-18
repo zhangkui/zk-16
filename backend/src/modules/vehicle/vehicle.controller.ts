@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,7 +17,9 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Request } from 'express';
 import { VehicleService } from './vehicle.service';
 import {
   CreateVehicleDto,
@@ -30,6 +33,7 @@ import { Vehicle } from './vehicle.entity';
 
 @ApiTags('车辆备案')
 @Controller('vehicles')
+@ApiBearerAuth()
 export class VehicleController {
   constructor(private readonly vehicleService: VehicleService) {}
 
@@ -38,15 +42,23 @@ export class VehicleController {
   @ApiResponse({ status: 201, description: '创建成功', type: Vehicle })
   @ApiResponse({ status: 409, description: '车牌号已存在' })
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createVehicleDto: CreateVehicleDto): Promise<Vehicle> {
-    return this.vehicleService.create(createVehicleDto);
+  create(
+    @Body() createVehicleDto: CreateVehicleDto,
+    @Req() req: Request,
+  ): Promise<Vehicle> {
+    const user = req['user'];
+    return this.vehicleService.create(createVehicleDto, user);
   }
 
   @Get()
   @ApiOperation({ summary: '分页查询车辆备案列表', description: '支持车牌号、状态、企业名称筛选，分页返回' })
   @ApiResponse({ status: 200, description: '查询成功' })
-  findAll(@Query() queryVehicleDto: QueryVehicleDto): Promise<{ data: Vehicle[]; total: number; page: number; pageSize: number }> {
-    return this.vehicleService.findAll(queryVehicleDto);
+  findAll(
+    @Query() queryVehicleDto: QueryVehicleDto,
+    @Req() req: Request,
+  ): Promise<{ data: Vehicle[]; total: number; page: number; pageSize: number }> {
+    const user = req['user'];
+    return this.vehicleService.findAll(queryVehicleDto, user);
   }
 
   @Get('verify')
@@ -62,8 +74,12 @@ export class VehicleController {
   @ApiParam({ name: 'plateNumber', description: '车牌号' })
   @ApiResponse({ status: 200, description: '查询成功', type: Vehicle })
   @ApiResponse({ status: 404, description: '车辆不存在' })
-  findByPlateNumber(@Param('plateNumber') plateNumber: string): Promise<Vehicle> {
-    return this.vehicleService.findByPlateNumber(plateNumber);
+  findByPlateNumber(
+    @Param('plateNumber') plateNumber: string,
+    @Req() req: Request,
+  ): Promise<Vehicle> {
+    const user = req['user'];
+    return this.vehicleService.findByPlateNumber(plateNumber, user);
   }
 
   @Get(':id')
@@ -71,8 +87,12 @@ export class VehicleController {
   @ApiParam({ name: 'id', description: '车辆ID(UUID)' })
   @ApiResponse({ status: 200, description: '查询成功', type: Vehicle })
   @ApiResponse({ status: 404, description: '车辆不存在' })
-  findOne(@Param('id') id: string): Promise<Vehicle> {
-    return this.vehicleService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ): Promise<Vehicle> {
+    const user = req['user'];
+    return this.vehicleService.findOne(id, user);
   }
 
   @Patch(':id/approve')
@@ -84,8 +104,10 @@ export class VehicleController {
   approve(
     @Param('id') id: string,
     @Body() approveVehicleDto: ApproveVehicleDto,
+    @Req() req: Request,
   ): Promise<Vehicle> {
-    return this.vehicleService.approve(id, approveVehicleDto);
+    const user = req['user'];
+    return this.vehicleService.approve(id, approveVehicleDto, user);
   }
 
   @Patch(':id/reject')
@@ -97,8 +119,10 @@ export class VehicleController {
   reject(
     @Param('id') id: string,
     @Body() rejectVehicleDto: RejectVehicleDto,
+    @Req() req: Request,
   ): Promise<Vehicle> {
-    return this.vehicleService.reject(id, rejectVehicleDto);
+    const user = req['user'];
+    return this.vehicleService.reject(id, rejectVehicleDto, user);
   }
 
   @Patch(':id')
@@ -110,8 +134,10 @@ export class VehicleController {
   update(
     @Param('id') id: string,
     @Body() updateVehicleDto: UpdateVehicleDto,
+    @Req() req: Request,
   ): Promise<Vehicle> {
-    return this.vehicleService.update(id, updateVehicleDto);
+    const user = req['user'];
+    return this.vehicleService.update(id, updateVehicleDto, user);
   }
 
   @Delete(':id')
@@ -120,7 +146,11 @@ export class VehicleController {
   @ApiParam({ name: 'id', description: '车辆ID(UUID)' })
   @ApiResponse({ status: 204, description: '删除成功' })
   @ApiResponse({ status: 404, description: '车辆不存在' })
-  remove(@Param('id') id: string): Promise<void> {
-    return this.vehicleService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ): Promise<void> {
+    const user = req['user'];
+    return this.vehicleService.remove(id, user);
   }
 }

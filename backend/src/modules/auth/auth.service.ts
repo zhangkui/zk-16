@@ -46,6 +46,8 @@ export class AuthService {
         username: user.username,
         role: user.role,
         department: user.department,
+        companyId: user.companyId,
+        isCompanySuperAdmin: user.isCompanySuperAdmin,
       },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN },
@@ -62,6 +64,8 @@ export class AuthService {
         department: user.department,
         phone: user.phone,
         email: user.email,
+        companyId: user.companyId,
+        isCompanySuperAdmin: user.isCompanySuperAdmin,
       },
     };
   }

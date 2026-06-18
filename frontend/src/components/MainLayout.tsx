@@ -18,21 +18,24 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   BellOutlined,
+  BankOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/auth';
 
 const { Header, Sider, Content } = Layout;
 
-const menuItems = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/vehicles', icon: <CarOutlined />, label: '车辆备案' },
-  { key: '/fences', icon: <BorderInnerOutlined />, label: '电子围栏' },
-  { key: '/transport-orders', icon: <FileTextOutlined />, label: '运输单' },
-  { key: '/track', icon: <EnvironmentOutlined />, label: '轨迹监控' },
-  { key: '/alerts', icon: <WarningOutlined />, label: '告警中心' },
-  { key: '/evidences', icon: <CameraOutlined />, label: '证据管理' },
-  { key: '/disposal-receipts', icon: <FormOutlined />, label: '处置联单' },
-  { key: '/audit', icon: <AuditOutlined />, label: '审计日志' },
+const allMenuItems = [
+  { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘', roles: ['admin', 'supervision', 'department_auditor', 'transport_enterprise', 'company_super_admin', 'company_admin'] },
+  { key: '/companies', icon: <BankOutlined />, label: '公司管理', roles: ['admin'] },
+  { key: '/vehicles', icon: <CarOutlined />, label: '车辆备案', roles: ['admin', 'supervision', 'department_auditor', 'transport_enterprise', 'company_super_admin', 'company_admin'] },
+  { key: '/fences', icon: <BorderInnerOutlined />, label: '电子围栏', roles: ['admin', 'supervision', 'department_auditor'] },
+  { key: '/transport-orders', icon: <FileTextOutlined />, label: '运输单', roles: ['admin', 'supervision', 'department_auditor', 'transport_enterprise', 'company_super_admin', 'company_admin'] },
+  { key: '/track', icon: <EnvironmentOutlined />, label: '轨迹监控', roles: ['admin', 'supervision', 'department_auditor'] },
+  { key: '/alerts', icon: <WarningOutlined />, label: '告警中心', roles: ['admin', 'supervision', 'department_auditor'] },
+  { key: '/evidences', icon: <CameraOutlined />, label: '证据管理', roles: ['admin', 'supervision', 'department_auditor'] },
+  { key: '/disposal-receipts', icon: <FormOutlined />, label: '处置联单', roles: ['admin', 'supervision', 'department_auditor'] },
+  { key: '/audit', icon: <AuditOutlined />, label: '审计日志', roles: ['admin', 'supervision'] },
 ];
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +43,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuthStore();
+
+  const menuItems = allMenuItems.filter((item) => {
+    if (!user?.role) return false;
+    return item.roles?.includes(user.role);
+  });
 
   const selectedKey = menuItems.find((item) => pathname.startsWith(item.key))?.key || '/dashboard';
 

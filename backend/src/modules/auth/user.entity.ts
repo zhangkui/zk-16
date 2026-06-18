@@ -13,6 +13,8 @@ export enum UserRole {
   TRANSPORT_ENTERPRISE = 'transport_enterprise',
   SUPERVISION = 'supervision',
   DEPARTMENT_AUDITOR = 'department_auditor',
+  COMPANY_SUPER_ADMIN = 'company_super_admin',
+  COMPANY_ADMIN = 'company_admin',
 }
 
 export enum UserStatus {
@@ -46,6 +48,14 @@ export class User {
     comment: '角色',
   })
   role: UserRole;
+
+  @ApiProperty({ description: '所属公司ID' })
+  @Column({ type: 'uuid', nullable: true, comment: '所属公司ID' })
+  companyId: string;
+
+  @ApiProperty({ description: '是否为公司超级管理员' })
+  @Column({ type: 'boolean', default: false, comment: '是否为公司超级管理员' })
+  isCompanySuperAdmin: boolean;
 
   @ApiProperty({ description: '所属部门' })
   @Column({ type: 'varchar', length: 100, nullable: true, comment: '所属部门' })

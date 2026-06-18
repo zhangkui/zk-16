@@ -69,6 +69,11 @@ export class CreateVehicleDto {
   @IsString()
   companyName?: string;
 
+  @ApiProperty({ description: '所属公司ID', example: 'uuid' })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
+
   @ApiProperty({ description: '所属运输企业 - 别名', example: '北京市XX运输有限公司' })
   @IsOptional()
   @IsString()
@@ -173,6 +178,11 @@ export class UpdateVehicleDto {
   @IsString()
   companyName?: string;
 
+  @ApiPropertyOptional({ description: '所属公司ID', example: 'uuid' })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
+
   @ApiPropertyOptional({ description: '所属运输企业 - 别名', example: '北京市XX运输有限公司' })
   @IsOptional()
   @IsString()
@@ -256,6 +266,11 @@ export class QueryVehicleDto {
   @IsOptional()
   @IsString()
   companyName?: string;
+
+  @ApiPropertyOptional({ description: '所属公司ID' })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 
   @ApiPropertyOptional({ description: '运输企业名称(模糊查询) - 别名' })
   @IsOptional()

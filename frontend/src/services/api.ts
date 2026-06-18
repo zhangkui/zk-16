@@ -137,6 +137,17 @@ export const auditApi = {
   export: (params?: any) => api.get('/audit/logs/export', { params, responseType: 'blob' }),
 };
 
+export const companyApi = {
+  create: (data: any) => api.post('/companies', data),
+  list: (params?: any) => api.get('/companies', { params }),
+  get: (id: string) => api.get(`/companies/${id}`),
+  update: (id: string, data: any) => api.patch(`/companies/${id}`, data),
+  remove: (id: string) => api.delete(`/companies/${id}`),
+  getUsers: (companyId: string, params?: any) => api.get(`/companies/${companyId}/users`, { params }),
+  createUser: (companyId: string, data: any) => api.post(`/companies/${companyId}/users`, data),
+  removeUser: (companyId: string, userId: string) => api.delete(`/companies/${companyId}/users/${userId}`),
+};
+
 export const simulationApi = {
   start: (data?: any) => api.post('/simulation/start', data),
   stop: () => api.post('/simulation/stop'),
