@@ -77,7 +77,9 @@ zk-16/
 │   │   │   ├── evidence/             # 证据管理
 │   │   │   ├── disposal-receipt/     # 处置联单
 │   │   │   └── audit/                # 审计日志
+│   │   ├── mqtt/                    # MQTT 数据上报模块
 │   │   ├── kafka/                    # Kafka 集成模块
+│   │   ├── modules/simulation/      # 模拟数据上报模块
 │   │   ├── app.module.ts
 │   │   └── main.ts
 │   ├── Dockerfile
@@ -194,6 +196,8 @@ npm run dev
 - `/evidences/*` - 证据
 - `/disposal-receipts/*` - 处置联单
 - `/audit-logs/*` - 审计日志
+- `/mqtt/*` - MQTT 数据上报
+- `/simulation/*` - 模拟数据
 
 ## 关键业务流程
 
