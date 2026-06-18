@@ -89,9 +89,8 @@ export default function VehiclesPage() {
       await vehicleApi.remove(id);
       setVehicles(vehicles.filter((v) => v.id !== id));
       message.success('删除成功');
-    } catch (error) {
-      setVehicles(vehicles.filter((v) => v.id !== id));
-      message.success('删除成功');
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '删除失败');
     }
   };
 

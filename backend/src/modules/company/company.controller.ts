@@ -135,9 +135,9 @@ export class CompanyController {
   @ApiResponse({ status: 200, description: '查询成功' })
   async getCompanyUsers(
     @Param('id') companyId: string,
+    @Req() req: Request,
     @Query('page') page?: number,
     @Query('pageSize') pageSize?: number,
-    @Req() req: Request,
   ): Promise<{ list: User[]; total: number; page: number; pageSize: number }> {
     const user = req['user'];
     if (!this.isAdmin(user) && user.companyId !== companyId) {

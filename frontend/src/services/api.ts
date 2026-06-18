@@ -23,11 +23,37 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+const mapCompanyName = (data: any): any => {
+  if (!data || typeof data !== 'object') return data;
+
+  if (Array.isArray(data)) {
+    return data.map(mapCompanyName);
+  }
+
+  const mapped = { ...data };
+  if (mapped.companyName !== undefined && mapped.company === undefined) {
+    mapped.company = mapped.companyName;
+  }
+
+  Object.keys(mapped).forEach((key) => {
+    if (mapped[key] && typeof mapped[key] === 'object') {
+      mapped[key] = mapCompanyName(mapped[key]);
+    }
+  });
+
+  return mapped;
+};
+
 api.interceptors.response.use(
   (response) => {
     if (response.data && response.data.data && response.data.total !== undefined) {
       response.data.list = response.data.data;
     }
+
+    if (response.data && typeof response.data === 'object') {
+      response.data = mapCompanyName(response.data);
+    }
+
     return response;
   },
   (error) => {
