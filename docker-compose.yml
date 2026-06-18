@@ -71,6 +71,24 @@ services:
       timeout: 10s
       retries: 5
 
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: waste-transport-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    networks:
+      - waste-transport-network
+    command: mosquitto -c /mosquitto-no-auth.conf
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/uptime' -C 1 -i healthcheck -W 3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: waste-transport-kafka-ui
@@ -109,6 +127,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BROKERS: kafka:29092
+      MQTT_BROKER_URL: mqtt://mosquitto:1883
     networks:
       - waste-transport-network
     restart: unless-stopped
@@ -132,6 +151,8 @@ volumes:
   postgis-data:
   redis-data:
   kafka-data:
+  mosquitto-data:
+  mosquitto-log:
 
 networks:
   waste-transport-network:

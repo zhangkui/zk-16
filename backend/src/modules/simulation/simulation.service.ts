@@ -1,8 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Vehicle, VehicleStatus } from '../vehicle/vehicle.entity';
 import { TrackService } from '../track/track.service';
+import { MqttService } from '../../mqtt/mqtt.service';
 
 export interface SimulatedVehicle {
   plateNumber: string;
@@ -26,10 +27,34 @@ export class SimulationService implements OnModuleInit {
   private readonly defaultCenter = { lng: 116.4074, lat: 39.9042 };
   private readonly defaultRadius = 0.05;
 
+  private readonly BEIJING_ROAD_NETWORK = [
+    { lng: 116.397, lat: 39.908 },
+    { lng: 116.405, lat: 39.910 },
+    { lng: 116.415, lat: 39.905 },
+    { lng: 116.420, lat: 39.912 },
+    { lng: 116.410, lat: 39.920 },
+    { lng: 116.395, lat: 39.918 },
+    { lng: 116.388, lat: 39.910 },
+    { lng: 116.400, lat: 39.898 },
+    { lng: 116.412, lat: 39.895 },
+    { lng: 116.425, lat: 39.900 },
+    { lng: 116.430, lat: 39.915 },
+    { lng: 116.418, lat: 39.925 },
+    { lng: 116.403, lat: 39.922 },
+    { lng: 116.390, lat: 39.915 },
+    { lng: 116.385, lat: 39.905 },
+    { lng: 116.392, lat: 39.895 },
+    { lng: 116.408, lat: 39.890 },
+    { lng: 116.422, lat: 39.892 },
+    { lng: 116.432, lat: 39.905 },
+    { lng: 116.428, lat: 39.920 },
+  ];
+
   constructor(
     @InjectRepository(Vehicle)
     private readonly vehicleRepository: Repository<Vehicle>,
     private readonly trackService: TrackService,
+    @Optional() private readonly mqttService: MqttService,
   ) {}
 
   onModuleInit() {
@@ -72,6 +97,47 @@ export class SimulationService implements OnModuleInit {
 
     this.logger.log(`Simulation started with ${vehiclesToSimulate.length} vehicles`);
     return { running: true, vehicles: vehiclesToSimulate };
+  }
+
+  async startVehicleSimulation(plateNumber: string): Promise<{ active: boolean; plateNumber: string }> {
+    let vehicle = this.simulatedVehicles.get(plateNumber);
+    if (!vehicle) {
+      vehicle = this.createSimulatedVehicle(plateNumber);
+      this.simulatedVehicles.set(plateNumber, vehicle);
+    }
+    vehicle.active = true;
+
+    if (!this.isRunning) {
+      this.isRunning = true;
+      this.startSimulationLoop();
+    }
+
+    this.logger.log(`Simulation started for vehicle ${plateNumber}`);
+    return { active: true, plateNumber };
+  }
+
+  stopVehicleSimulation(plateNumber: string): { active: boolean; plateNumber: string } {
+    const vehicle = this.simulatedVehicles.get(plateNumber);
+    if (vehicle) {
+      vehicle.active = false;
+      this.logger.log(`Simulation stopped for vehicle ${plateNumber}`);
+    }
+
+    const activeVehicles = Array.from(this.simulatedVehicles.values()).filter((v) => v.active);
+    if (activeVehicles.length === 0) {
+      this.isRunning = false;
+      if (this.simulationInterval) {
+        clearInterval(this.simulationInterval);
+        this.simulationInterval = null;
+      }
+    }
+
+    return { active: false, plateNumber };
+  }
+
+  isVehicleSimulating(plateNumber: string): boolean {
+    const vehicle = this.simulatedVehicles.get(plateNumber);
+    return vehicle?.active === true;
   }
 
   stopSimulation(): { running: boolean; vehicles: string[] } {
@@ -122,24 +188,23 @@ export class SimulationService implements OnModuleInit {
   }
 
   private createSimulatedVehicle(plateNumber: string): SimulatedVehicle {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * this.defaultRadius;
-    const startLng = this.defaultCenter.lng + Math.cos(angle) * distance;
-    const startLat = this.defaultCenter.lat + Math.sin(angle) * distance;
+    const waypointIndex = Math.floor(Math.random() * this.BEIJING_ROAD_NETWORK.length);
+    const waypoint = this.BEIJING_ROAD_NETWORK[waypointIndex];
+    const jitter = 0.002;
+    const startLng = waypoint.lng + (Math.random() - 0.5) * jitter;
+    const startLat = waypoint.lat + (Math.random() - 0.5) * jitter;
 
-    const targetAngle = Math.random() * Math.PI * 2;
-    const targetDistance = Math.random() * this.defaultRadius * 0.5;
-    const targetLng = this.defaultCenter.lng + Math.cos(targetAngle) * targetDistance;
-    const targetLat = this.defaultCenter.lat + Math.sin(targetAngle) * targetDistance;
+    const nextWaypointIndex = (waypointIndex + 1 + Math.floor(Math.random() * 3)) % this.BEIJING_ROAD_NETWORK.length;
+    const nextWaypoint = this.BEIJING_ROAD_NETWORK[nextWaypointIndex];
 
     return {
       plateNumber,
       currentLng: startLng,
       currentLat: startLat,
       speed: 30 + Math.random() * 30,
-      direction: Math.random() * 360,
-      targetLng,
-      targetLat,
+      direction: 0,
+      targetLng: nextWaypoint.lng + (Math.random() - 0.5) * jitter,
+      targetLat: nextWaypoint.lat + (Math.random() - 0.5) * jitter,
       active: false,
     };
   }
@@ -174,10 +239,12 @@ export class SimulationService implements OnModuleInit {
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance < 0.001) {
-      const angle = Math.random() * Math.PI * 2;
-      const targetDistance = 0.01 + Math.random() * 0.03;
-      vehicle.targetLng = vehicle.currentLng + Math.cos(angle) * targetDistance;
-      vehicle.targetLat = vehicle.currentLat + Math.sin(angle) * targetDistance;
+      const nearestIndex = this.findNearestWaypoint(vehicle.currentLng, vehicle.currentLat);
+      const nextIndex = (nearestIndex + 1 + Math.floor(Math.random() * 3)) % this.BEIJING_ROAD_NETWORK.length;
+      const nextWaypoint = this.BEIJING_ROAD_NETWORK[nextIndex];
+      const jitter = 0.002;
+      vehicle.targetLng = nextWaypoint.lng + (Math.random() - 0.5) * jitter;
+      vehicle.targetLat = nextWaypoint.lat + (Math.random() - 0.5) * jitter;
       return;
     }
 
@@ -191,20 +258,48 @@ export class SimulationService implements OnModuleInit {
     if (vehicle.direction < 0) vehicle.direction += 360;
   }
 
+  private findNearestWaypoint(lng: number, lat: number): number {
+    let minDist = Infinity;
+    let nearestIndex = 0;
+    for (let i = 0; i < this.BEIJING_ROAD_NETWORK.length; i++) {
+      const wp = this.BEIJING_ROAD_NETWORK[i];
+      const dist = Math.sqrt((wp.lng - lng) ** 2 + (wp.lat - lat) ** 2);
+      if (dist < minDist) {
+        minDist = dist;
+        nearestIndex = i;
+      }
+    }
+    return nearestIndex;
+  }
+
   private async reportTrackPoint(vehicle: SimulatedVehicle) {
+    const timestamp = new Date().toISOString();
+    const trackData = {
+      longitude: vehicle.currentLng,
+      latitude: vehicle.currentLat,
+      plateNumber: vehicle.plateNumber,
+      speed: vehicle.speed,
+      direction: vehicle.direction,
+      altitude: 50 + Math.random() * 20,
+      accuracy: 5 + Math.random() * 5,
+      timestamp,
+    };
+
     try {
-      await this.trackService.create({
-        longitude: vehicle.currentLng,
-        latitude: vehicle.currentLat,
-        plateNumber: vehicle.plateNumber,
-        speed: vehicle.speed,
-        direction: vehicle.direction,
-        altitude: 50 + Math.random() * 20,
-        accuracy: 5 + Math.random() * 5,
-        timestamp: new Date().toISOString(),
-      });
+      await this.trackService.create(trackData);
     } catch (error) {
       this.logger.error(`Failed to report track point for ${vehicle.plateNumber}:`, error.message);
+    }
+
+    if (this.mqttService && this.mqttService.isConnected()) {
+      try {
+        await this.mqttService.publishVehicleData({
+          ...trackData,
+          vehicleStatus: 'online',
+        });
+      } catch (error) {
+        this.logger.error(`Failed to publish MQTT data for ${vehicle.plateNumber}:`, error.message);
+      }
     }
   }
 

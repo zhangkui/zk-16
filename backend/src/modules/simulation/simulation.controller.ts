@@ -90,6 +90,32 @@ export class SimulationController {
     );
   }
 
+  @Get('vehicles/:plateNumber/status')
+  @ApiOperation({ summary: '获取单辆车模拟状态' })
+  @ApiParam({ name: 'plateNumber', description: '车牌号' })
+  @ApiResponse({ status: 200, description: '查询成功' })
+  getVehicleSimulationStatus(@Param('plateNumber') plateNumber: string) {
+    return { plateNumber, active: this.simulationService.isVehicleSimulating(plateNumber) };
+  }
+
+  @Post('vehicles/:plateNumber/start')
+  @ApiOperation({ summary: '开启单辆车模拟数据上报' })
+  @ApiParam({ name: 'plateNumber', description: '车牌号' })
+  @ApiResponse({ status: 200, description: '启动成功' })
+  @HttpCode(HttpStatus.OK)
+  startVehicleSimulation(@Param('plateNumber') plateNumber: string) {
+    return this.simulationService.startVehicleSimulation(plateNumber);
+  }
+
+  @Post('vehicles/:plateNumber/stop')
+  @ApiOperation({ summary: '关闭单辆车模拟数据上报' })
+  @ApiParam({ name: 'plateNumber', description: '车牌号' })
+  @ApiResponse({ status: 200, description: '停止成功' })
+  @HttpCode(HttpStatus.OK)
+  stopVehicleSimulation(@Param('plateNumber') plateNumber: string) {
+    return this.simulationService.stopVehicleSimulation(plateNumber);
+  }
+
   @Post('reset')
   @ApiOperation({ summary: '重置模拟' })
   @ApiResponse({ status: 200, description: '重置成功' })

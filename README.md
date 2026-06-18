@@ -13,6 +13,7 @@
 | 数据库 | PostgreSQL 15 + PostGIS 3.4（空间数据） |
 | 缓存 | Redis 7 |
 | 消息队列 | Kafka 7.5 |
+| IoT 协议 | MQTT 5.0 (Eclipse Mosquitto) |
 | 部署 | Docker Compose |
 
 ## 功能模块

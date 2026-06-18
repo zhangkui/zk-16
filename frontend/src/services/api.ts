@@ -189,4 +189,13 @@ export const simulationApi = {
   updateTarget: (plateNumber: string, data: any) => api.patch(`/simulation/vehicles/${plateNumber}/target`, data),
   setSpeed: (plateNumber: string, data: any) => api.patch(`/simulation/vehicles/${plateNumber}/speed`, data),
   reset: () => api.post('/simulation/reset'),
+  startVehicle: (plateNumber: string) => api.post(`/simulation/vehicles/${plateNumber}/start`),
+  stopVehicle: (plateNumber: string) => api.post(`/simulation/vehicles/${plateNumber}/stop`),
+  getVehicleStatus: (plateNumber: string) => api.get(`/simulation/vehicles/${plateNumber}/status`),
+};
+
+export const mqttApi = {
+  publish: (data: any) => api.post('/mqtt/publish', data),
+  publishBatch: (data: any) => api.post('/mqtt/publish/batch', data),
+  getStatus: () => api.get('/mqtt/status'),
 };

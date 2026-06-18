@@ -15,9 +15,11 @@ import {
   InputNumber,
   Row,
   Col,
+  Switch,
+  Tooltip,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { vehicleApi, companyApi } from '@/services/api';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, CheckCircleOutlined, ThunderboltOutlined, StopOutlined } from '@ant-design/icons';
+import { vehicleApi, companyApi, simulationApi } from '@/services/api';
 import { useAuthStore } from '@/store/auth';
 import dayjs from 'dayjs';
 
@@ -55,6 +57,8 @@ export default function VehiclesPage() {
   const [reviewingVehicle, setReviewingVehicle] = useState<Vehicle | null>(null);
   const [form] = Form.useForm();
   const [reviewForm] = Form.useForm();
+  const [simulatingVehicles, setSimulatingVehicles] = useState<Set<string>>(new Set());
+  const [simulationLoading, setSimulationLoading] = useState<Set<string>>(new Set());
 
   const isCompanyAdmin = user?.role === 'company_super_admin' || user?.role === 'company_admin';
   const canReview = user?.role === 'admin' || user?.role === 'supervision' || user?.role === 'department_auditor';
@@ -64,7 +68,19 @@ export default function VehiclesPage() {
     if (!isCompanyAdmin) {
       fetchCompanies();
     }
+    fetchSimulationStatus();
   }, []);
+
+  const fetchSimulationStatus = async () => {
+    try {
+      const res = await simulationApi.status();
+      const activeVehicles = res.data?.vehicles?.filter((v: any) => v.active) || [];
+      const activeSet = new Set<string>(activeVehicles.map((v: any) => v.plateNumber as string));
+      setSimulatingVehicles(activeSet);
+    } catch (error) {
+      // ignore
+    }
+  };
 
   const fetchCompanies = async () => {
     setCompaniesLoading(true);
@@ -90,6 +106,33 @@ export default function VehiclesPage() {
       setVehicles([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleSimulation = async (plateNumber: string, currentActive: boolean) => {
+    setSimulationLoading((prev) => new Set(prev).add(plateNumber));
+    try {
+      if (currentActive) {
+        await simulationApi.stopVehicle(plateNumber);
+        setSimulatingVehicles((prev) => {
+          const next = new Set(prev);
+          next.delete(plateNumber);
+          return next;
+        });
+        message.success(`车辆 ${plateNumber} 模拟已关闭`);
+      } else {
+        await simulationApi.startVehicle(plateNumber);
+        setSimulatingVehicles((prev) => new Set(prev).add(plateNumber));
+        message.success(`车辆 ${plateNumber} 模拟已开启，正在上报数据`);
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '操作失败');
+    } finally {
+      setSimulationLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(plateNumber);
+        return next;
+      });
     }
   };
 
@@ -240,6 +283,27 @@ export default function VehiclesPage() {
     { title: '废物类型', dataIndex: 'wasteType', key: 'wasteType' },
     { title: '所属公司', dataIndex: 'company', key: 'company' },
     { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: (s: Vehicle['status']) => getStatusTag(s) },
+    {
+      title: '模拟上报',
+      key: 'simulation',
+      width: 100,
+      render: (_: any, record: Vehicle) => {
+        if (record.status !== 'approved') return <Tag color="default">需审核通过</Tag>;
+        const isActive = simulatingVehicles.has(record.plateNumber);
+        const isLoading = simulationLoading.has(record.plateNumber);
+        return (
+          <Tooltip title={isActive ? '关闭模拟数据上报' : '开启模拟数据上报'}>
+            <Switch
+              checked={isActive}
+              loading={isLoading}
+              onChange={() => handleToggleSimulation(record.plateNumber, isActive)}
+              checkedChildren={<ThunderboltOutlined />}
+              unCheckedChildren={<StopOutlined />}
+            />
+          </Tooltip>
+        );
+      },
+    },
     { title: '备注', dataIndex: 'remark', key: 'remark' },
     { title: '备案时间', dataIndex: 'createdAt', key: 'createdAt', width: 180, render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-' },
     {
@@ -281,7 +345,7 @@ export default function VehiclesPage() {
         columns={columns}
         dataSource={vehicles}
         loading={loading}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1500 }}
         pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
       />
 
