@@ -50,14 +50,7 @@ interface Alert {
   processRemark?: string;
 }
 
-const mockAlerts: Alert[] = [
-  { id: '1', alertType: 'speeding', plateNumber: '京A12345', driverName: '张三', description: '车辆在东三环超速行驶，限速60km/h，实际速度85km/h', location: '北京市朝阳区东三环中路', lat: 39.9142, lng: 116.4674, level: 'high', status: 'active', createdAt: '2024-01-20 10:30:00' },
-  { id: '2', alertType: 'route_deviation', plateNumber: '京B67890', driverName: '李四', description: '车辆偏离规划路线超过500米', location: '北京市海淀区中关村大街', lat: 39.9842, lng: 116.3174, level: 'medium', status: 'acknowledged', createdAt: '2024-01-20 09:45:00', acknowledgedAt: '2024-01-20 10:00:00' },
-  { id: '3', alertType: 'fence_violation', plateNumber: '京C11111', driverName: '王五', description: '车辆进入禁行区域-市中心', location: '北京市东城区王府井', lat: 39.9142, lng: 116.4174, level: 'critical', status: 'processing', createdAt: '2024-01-20 08:30:00', acknowledgedAt: '2024-01-20 08:45:00', processedAt: '2024-01-20 09:00:00', processRemark: '已联系驾驶员，正在驶离禁行区' },
-  { id: '4', alertType: 'timeout', plateNumber: '京D22222', driverName: '赵六', description: '车辆在某区域停留超过2小时', location: '北京市丰台区南四环西路', lat: 39.8342, lng: 116.3574, level: 'low', status: 'closed', createdAt: '2024-01-19 16:00:00', acknowledgedAt: '2024-01-19 16:30:00', processedAt: '2024-01-19 17:00:00', closedAt: '2024-01-19 18:00:00', processRemark: '车辆正常装卸作业，已完成' },
-  { id: '5', alertType: 'speeding', plateNumber: '京A12345', driverName: '张三', description: '车辆在南四环超速行驶，限速60km/h，实际速度75km/h', location: '北京市丰台区南四环中路', lat: 39.8542, lng: 116.4074, level: 'medium', status: 'active', createdAt: '2024-01-20 11:15:00' },
-  { id: '6', alertType: 'other', plateNumber: '京E33333', driverName: '钱七', description: '设备通讯异常超过30分钟', location: '未知', level: 'medium', status: 'active', createdAt: '2024-01-20 10:45:00' },
-];
+
 
 const alertTypeMap = {
   speeding: { color: 'red', text: '超速', icon: <WarningOutlined /> },
@@ -82,7 +75,7 @@ const statusMap = {
 };
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [processVisible, setProcessVisible] = useState(false);

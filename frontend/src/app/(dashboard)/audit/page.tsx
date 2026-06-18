@@ -48,21 +48,6 @@ interface AuditLog {
   createdAt: string;
 }
 
-const mockLogs: AuditLog[] = [
-  { id: '1', operationType: 'login', module: 'auth', operator: 'admin', description: '用户登录系统', ip: '192.168.1.100', requestMethod: 'POST', requestUrl: '/auth/login', responseStatus: 200, duration: 120, createdAt: '2024-01-20 10:00:00' },
-  { id: '2', operationType: 'create', module: 'vehicle', operator: 'admin', description: '新增车辆备案：京F12345', targetId: 'v123', targetType: 'vehicle', ip: '192.168.1.100', requestMethod: 'POST', requestUrl: '/vehicles', responseStatus: 201, duration: 85, createdAt: '2024-01-20 10:15:00' },
-  { id: '3', operationType: 'approve', module: 'vehicle', operator: 'admin', description: '审核通过车辆：京B67890', targetId: 'v456', targetType: 'vehicle', ip: '192.168.1.100', requestMethod: 'PATCH', requestUrl: '/vehicles/v456/approve', responseStatus: 200, duration: 60, createdAt: '2024-01-20 10:30:00' },
-  { id: '4', operationType: 'create', module: 'fence', operator: 'admin', description: '创建电子围栏：化工园区东区', targetId: 'f789', targetType: 'fence', ip: '192.168.1.100', requestMethod: 'POST', requestUrl: '/fences', responseStatus: 201, duration: 95, createdAt: '2024-01-20 11:00:00' },
-  { id: '5', operationType: 'update', module: 'fence', operator: 'admin', description: '修改电子围栏：化工园区东区', targetId: 'f789', targetType: 'fence', ip: '192.168.1.100', requestMethod: 'PATCH', requestUrl: '/fences/f789', responseStatus: 200, duration: 70, createdAt: '2024-01-20 11:15:00' },
-  { id: '6', operationType: 'create', module: 'transport_order', operator: 'admin', description: '创建运输单：TO20240120003', targetId: 'to001', targetType: 'transport_order', ip: '192.168.1.100', requestMethod: 'POST', requestUrl: '/transport-orders', responseStatus: 201, duration: 110, createdAt: '2024-01-20 11:30:00' },
-  { id: '7', operationType: 'process', module: 'alert', operator: 'admin', description: '处理告警：围栏越界告警', targetId: 'a123', targetType: 'alert', ip: '192.168.1.100', requestMethod: 'PATCH', requestUrl: '/alerts/a123/process', responseStatus: 200, duration: 55, createdAt: '2024-01-20 12:00:00' },
-  { id: '8', operationType: 'verify', module: 'evidence', operator: 'admin', description: '审核证据：超速抓拍', targetId: 'e456', targetType: 'evidence', ip: '192.168.1.100', requestMethod: 'PATCH', requestUrl: '/evidences/e456/verify', responseStatus: 200, duration: 80, createdAt: '2024-01-20 14:00:00' },
-  { id: '9', operationType: 'match', module: 'disposal_receipt', operator: 'admin', description: '匹配联单：DR20240120001', targetId: 'dr789', targetType: 'disposal_receipt', ip: '192.168.1.100', requestMethod: 'PATCH', requestUrl: '/disposal-receipts/dr789/match', responseStatus: 200, duration: 65, createdAt: '2024-01-20 14:30:00' },
-  { id: '10', operationType: 'export', module: 'system', operator: 'admin', description: '导出审计日志', ip: '192.168.1.100', requestMethod: 'GET', requestUrl: '/audit-logs/export', responseStatus: 200, duration: 500, createdAt: '2024-01-20 15:00:00' },
-  { id: '11', operationType: 'delete', module: 'vehicle', operator: 'admin', description: '删除车辆：京D22222', targetId: 'v111', targetType: 'vehicle', ip: '192.168.1.100', requestMethod: 'DELETE', requestUrl: '/vehicles/v111', responseStatus: 200, duration: 45, createdAt: '2024-01-20 15:30:00' },
-  { id: '12', operationType: 'logout', module: 'auth', operator: 'admin', description: '用户退出系统', ip: '192.168.1.100', requestMethod: 'POST', requestUrl: '/auth/logout', responseStatus: 200, duration: 30, createdAt: '2024-01-20 18:00:00' },
-];
-
 const operationTypeMap: Record<string, { color: string; text: string }> = {
   create: { color: 'green', text: '创建' },
   update: { color: 'blue', text: '更新' },
@@ -92,7 +77,7 @@ const moduleMap: Record<string, { color: string; text: string; icon: any }> = {
 };
 
 export default function AuditPage() {
-  const [logs, setLogs] = useState<AuditLog[]>(mockLogs);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [operator, setOperator] = useState('');

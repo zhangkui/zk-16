@@ -47,85 +47,6 @@ interface Evidence {
   createdAt: string;
 }
 
-const mockEvidences: Evidence[] = [
-  {
-    id: '1',
-    alertId: 'alert1',
-    plateNumber: '京A12345',
-    evidenceType: 'photo',
-    evidenceUrl: 'https://picsum.photos/800/600?random=1',
-    thumbnailUrl: 'https://picsum.photos/200/150?random=1',
-    description: '超速抓拍照片，显示车辆速度85km/h，限速60km/h',
-    location: '北京市朝阳区东三环中路',
-    lat: 39.9142,
-    lng: 116.4674,
-    captureTime: '2024-01-20 10:30:15',
-    status: 'fixed',
-    hash: '0xabc123def456...',
-    fixTime: '2024-01-20 10:35:00',
-    createdAt: '2024-01-20 10:30:20',
-  },
-  {
-    id: '2',
-    alertId: 'alert2',
-    plateNumber: '京B67890',
-    evidenceType: 'screenshot',
-    evidenceUrl: 'https://picsum.photos/800/600?random=2',
-    thumbnailUrl: 'https://picsum.photos/200/150?random=2',
-    description: '路线偏离监控系统截图，显示车辆偏离规划路线500米以上',
-    location: '北京市海淀区中关村大街',
-    captureTime: '2024-01-20 09:45:30',
-    status: 'verified',
-    hash: '0xdef789ghi012...',
-    fixTime: '2024-01-20 09:50:00',
-    verifyTime: '2024-01-20 10:00:00',
-    verifyRemark: '证据有效，确认为路线偏离',
-    createdAt: '2024-01-20 09:45:35',
-  },
-  {
-    id: '3',
-    alertId: 'alert3',
-    plateNumber: '京C11111',
-    evidenceType: 'video',
-    evidenceUrl: 'https://picsum.photos/800/600?random=3',
-    thumbnailUrl: 'https://picsum.photos/200/150?random=3',
-    description: '车辆进入禁行区域的视频片段',
-    location: '北京市东城区王府井',
-    captureTime: '2024-01-20 08:30:00',
-    status: 'pending',
-    createdAt: '2024-01-20 08:30:05',
-  },
-  {
-    id: '4',
-    plateNumber: '京D22222',
-    evidenceType: 'photo',
-    evidenceUrl: 'https://picsum.photos/800/600?random=4',
-    thumbnailUrl: 'https://picsum.photos/200/150?random=4',
-    description: '超时停留现场照片，显示车辆停留在指定区域超过2小时',
-    location: '北京市丰台区南四环西路',
-    captureTime: '2024-01-19 16:00:00',
-    status: 'archived',
-    hash: '0xjkl345mno678...',
-    fixTime: '2024-01-19 16:30:00',
-    verifyTime: '2024-01-19 17:00:00',
-    verifyRemark: '证据有效，为正常装卸作业',
-    createdAt: '2024-01-19 16:00:10',
-  },
-  {
-    id: '5',
-    alertId: 'alert5',
-    plateNumber: '京A12345',
-    evidenceType: 'photo',
-    evidenceUrl: 'https://picsum.photos/800/600?random=5',
-    thumbnailUrl: 'https://picsum.photos/200/150?random=5',
-    description: '南四环超速抓拍',
-    location: '北京市丰台区南四环中路',
-    captureTime: '2024-01-20 11:15:20',
-    status: 'pending',
-    createdAt: '2024-01-20 11:15:25',
-  },
-];
-
 const evidenceTypeMap = {
   photo: { color: 'blue', text: '照片', icon: <CameraOutlined /> },
   video: { color: 'purple', text: '视频' },
@@ -142,7 +63,7 @@ const statusMap = {
 };
 
 export default function EvidencesPage() {
-  const [evidences, setEvidences] = useState<Evidence[]>(mockEvidences);
+  const [evidences, setEvidences] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [verifyVisible, setVerifyVisible] = useState(false);

@@ -63,18 +63,13 @@ const generateMockTrack = (): TrackPoint[] => {
   return points;
 };
 
-const mockVehicles: VehiclePosition[] = [
-  { plateNumber: '京A12345', lat: 39.9142, lng: 116.4174, speed: 45, timestamp: '2024-01-20 10:30:00', status: '运输中' },
-  { plateNumber: '京C11111', lat: 39.8942, lng: 116.3974, speed: 0, timestamp: '2024-01-20 10:25:00', status: '装卸中' },
-  { plateNumber: '京B67890', lat: 39.9242, lng: 116.4274, speed: 30, timestamp: '2024-01-20 10:28:00', status: '运输中' },
-  { plateNumber: '京D22222', lat: 39.8842, lng: 116.3874, speed: 55, timestamp: '2024-01-20 10:29:00', status: '运输中' },
-];
+
 
 export default function TrackPage() {
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
   const [selectedOrder, setSelectedOrder] = useState<string>('');
   const [trackPoints, setTrackPoints] = useState<TrackPoint[]>([]);
-  const [vehicles, setVehicles] = useState<VehiclePosition[]>(mockVehicles);
+  const [vehicles, setVehicles] = useState<VehiclePosition[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -85,18 +80,23 @@ export default function TrackPage() {
   const [orderList, setOrderList] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchVehicleList();
-    fetchVehiclePositions();
+    const init = async () => {
+      const vehicles = await fetchVehicleList();
+      fetchVehiclePositions(vehicles);
+    };
+    init();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
 
   const fetchVehicleList = async () => {
+    let vehicles: any[] = [];
     try {
       const res = await vehicleApi.list({ pageSize: 100 });
       if (res.data?.list?.length > 0) {
-        setVehicleList(res.data.list);
+        vehicles = res.data.list;
+        setVehicleList(vehicles);
       }
     } catch (error) {
       console.error(error);
@@ -109,11 +109,14 @@ export default function TrackPage() {
     } catch (error) {
       console.error(error);
     }
+    return vehicles;
   };
 
-  const fetchVehiclePositions = async () => {
+  const fetchVehiclePositions = async (vehicleList: any[] = []) => {
     try {
-      const res = await trackApi.getLatestPositions({ plateNumbers: mockVehicles.map(v => v.plateNumber) });
+      const plateNumbers = vehicleList.map(v => v.plateNumber).filter(Boolean);
+      if (plateNumbers.length === 0) return;
+      const res = await trackApi.getLatestPositions({ plateNumbers });
       if (res.data?.length > 0) {
         setVehicles(res.data);
       }

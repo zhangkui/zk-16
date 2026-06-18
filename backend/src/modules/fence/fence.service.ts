@@ -160,6 +160,8 @@ export class FenceService {
 
     if (this.isCompanyAdmin(user)) {
       insertData.companyId = user.companyId;
+    } else if (dto.companyId) {
+      insertData.companyId = dto.companyId;
     }
 
     let wkt: string | null = null;

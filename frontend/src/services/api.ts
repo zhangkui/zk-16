@@ -23,21 +23,27 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-const mapCompanyName = (data: any): any => {
+const mapFieldAliases = (data: any): any => {
   if (!data || typeof data !== 'object') return data;
 
   if (Array.isArray(data)) {
-    return data.map(mapCompanyName);
+    return data.map(mapFieldAliases);
   }
 
   const mapped = { ...data };
   if (mapped.companyName !== undefined && mapped.company === undefined) {
     mapped.company = mapped.companyName;
   }
+  if (mapped.loadCapacity !== undefined && mapped.capacity === undefined) {
+    mapped.capacity = mapped.loadCapacity;
+  }
+  if (mapped.auditRemark !== undefined && mapped.remark === undefined) {
+    mapped.remark = mapped.auditRemark;
+  }
 
   Object.keys(mapped).forEach((key) => {
     if (mapped[key] && typeof mapped[key] === 'object') {
-      mapped[key] = mapCompanyName(mapped[key]);
+      mapped[key] = mapFieldAliases(mapped[key]);
     }
   });
 
@@ -51,7 +57,7 @@ api.interceptors.response.use(
     }
 
     if (response.data && typeof response.data === 'object') {
-      response.data = mapCompanyName(response.data);
+      response.data = mapFieldAliases(response.data);
     }
 
     return response;

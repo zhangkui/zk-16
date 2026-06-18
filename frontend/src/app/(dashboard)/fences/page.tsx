@@ -33,7 +33,8 @@ import {
   CloseOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { fenceApi, simulationApi } from '@/services/api';
+import { fenceApi, simulationApi, companyApi } from '@/services/api';
+import { useAuthStore } from '@/store/auth';
 
 const { Option } = Select;
 const { Step } = Steps;
@@ -85,15 +86,26 @@ const fenceColorMap: Record<string, string> = {
   storage: '#faad14',
 };
 
+interface Company {
+  id: string;
+  name: string;
+}
+
 export default function FencesPage() {
+  const { user } = useAuthStore();
   const [fences, setFences] = useState<Fence[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedFence, setSelectedFence] = useState<Fence | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
   const [form] = Form.useForm();
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'add' | 'edit'>('add');
   const [editingFence, setEditingFence] = useState<Fence | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
+
+  const isCompanyAdmin = user?.role === 'company_super_admin' || user?.role === 'company_admin';
+  const isAdmin = user?.role === 'admin';
 
   const [polygonPoints, setPolygonPoints] = useState<{ lng: number; lat: number }[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -188,6 +200,9 @@ export default function FencesPage() {
 
         fetchFences();
         fetchSimulationStatus();
+        if (isAdmin) {
+          fetchCompanies();
+        }
       } catch (error: any) {
         message.error('地图加载失败: ' + error.message);
       }
@@ -232,6 +247,19 @@ export default function FencesPage() {
       message.error('获取围栏列表失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCompanies = async () => {
+    setCompaniesLoading(true);
+    try {
+      const res = await companyApi.list({ pageSize: 1000 });
+      const list = res.data?.list || res.data?.data || [];
+      setCompanies(list);
+    } catch (error) {
+      console.error('Failed to fetch companies:', error);
+    } finally {
+      setCompaniesLoading(false);
     }
   };
 
@@ -360,6 +388,11 @@ export default function FencesPage() {
     setDrawerMode('add');
     setEditingFence(null);
     form.resetFields();
+    if (isCompanyAdmin) {
+      form.setFieldsValue({
+        companyId: user?.companyId || '',
+      });
+    }
     setPolygonPoints([]);
     setIsDrawing(false);
     clearTempOverlays();
@@ -374,6 +407,7 @@ export default function FencesPage() {
       name: record.name,
       fenceType: record.fenceType,
       description: record.remark || record.description || '',
+      companyId: (record as any).companyId,
     });
     setPolygonPoints([]);
     setIsDrawing(false);
@@ -820,6 +854,30 @@ export default function FencesPage() {
               <Option value="storage">存储区</Option>
             </Select>
           </Form.Item>
+
+          {isAdmin && (
+            <Form.Item
+              name="companyId"
+              label="所属公司"
+              rules={[{ required: true, message: '请选择所属公司' }]}
+            >
+              <Select
+                placeholder="请选择所属公司"
+                loading={companiesLoading}
+                showSearch
+                optionFilterProp="children"
+                filterOption={(input, option) =>
+                  (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+              >
+                {companies.map((c) => (
+                  <Option key={c.id} value={c.id}>
+                    {c.name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          )}
 
           <Form.Item name="description" label="备注描述">
             <Input.TextArea rows={3} placeholder="请输入围栏备注信息" maxLength={500} />

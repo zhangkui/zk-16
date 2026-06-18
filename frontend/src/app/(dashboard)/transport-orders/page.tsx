@@ -43,14 +43,6 @@ interface TransportOrder {
   createdAt: string;
 }
 
-const mockOrders: TransportOrder[] = [
-  { id: '1', orderNo: 'TO20240120001', plateNumber: '京A12345', driverName: '张三', wasteType: 'HW08废矿物油', weight: 8.5, loadingAddress: '北京化工厂', unloadingAddress: '危险废物处置中心', expectedStartTime: '2024-01-20 08:00:00', expectedEndTime: '2024-01-20 18:00:00', loadingTime: '2024-01-20 08:30:00', status: 'transporting', createdAt: '2024-01-19 16:00:00' },
-  { id: '2', orderNo: 'TO20240120002', plateNumber: '京C11111', driverName: '王五', wasteType: 'HW49其他废物', weight: 5.2, loadingAddress: '某制药厂', unloadingAddress: '危险废物处置中心', expectedStartTime: '2024-01-20 09:00:00', expectedEndTime: '2024-01-20 17:00:00', loadingTime: '2024-01-20 09:15:00', unloadingTime: '2024-01-20 15:30:00', status: 'completed', createdAt: '2024-01-19 17:00:00' },
-  { id: '3', orderNo: 'TO20240121001', plateNumber: '京B67890', driverName: '李四', wasteType: 'HW06废有机溶剂', weight: 15.0, loadingAddress: '某电子厂', unloadingAddress: '危险废物处置中心', expectedStartTime: '2024-01-21 07:00:00', expectedEndTime: '2024-01-21 19:00:00', status: 'pending', createdAt: '2024-01-20 10:00:00' },
-  { id: '4', orderNo: 'TO20240120003', plateNumber: '京A12345', driverName: '张三', wasteType: 'HW17表面处理废物', weight: 10.0, loadingAddress: '某电镀厂', unloadingAddress: '危险废物处置中心', expectedStartTime: '2024-01-20 10:00:00', expectedEndTime: '2024-01-20 20:00:00', status: 'loading', deviation: true, createdAt: '2024-01-19 18:00:00' },
-  { id: '5', orderNo: 'TO20240119001', plateNumber: '京D22222', driverName: '赵六', wasteType: 'HW08废矿物油', weight: 12.0, loadingAddress: '某修理厂', unloadingAddress: '危险废物处置中心', expectedStartTime: '2024-01-19 08:00:00', expectedEndTime: '2024-01-19 16:00:00', status: 'cancelled', createdAt: '2024-01-18 15:00:00' },
-];
-
 const statusMap = {
   pending: { color: 'default', text: '待开始', badge: 'default' },
   loading: { color: 'blue', text: '装载中', badge: 'processing' },
@@ -61,7 +53,7 @@ const statusMap = {
 };
 
 export default function TransportOrdersPage() {
-  const [orders, setOrders] = useState<TransportOrder[]>(mockOrders);
+  const [orders, setOrders] = useState<TransportOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);

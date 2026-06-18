@@ -83,11 +83,11 @@ export default function VehiclesPage() {
     setLoading(true);
     try {
       const res = await vehicleApi.list({ pageSize: 100 });
-      if (res.data?.list?.length > 0) {
-        setVehicles(res.data.list);
-      }
+      const list = res.data?.list || res.data?.data || [];
+      setVehicles(list);
     } catch (error) {
       console.error('Failed to fetch vehicles:', error);
+      setVehicles([]);
     } finally {
       setLoading(false);
     }
@@ -107,7 +107,15 @@ export default function VehiclesPage() {
 
   const handleEdit = (record: Vehicle) => {
     setEditingVehicle(record);
-    form.setFieldsValue(record);
+    const formValues: any = {
+      ...record,
+      capacity: record.capacity || (record as any).loadCapacity,
+      remark: record.remark || (record as any).auditRemark,
+    };
+    if (!isCompanyAdmin) {
+      formValues.companyId = record.companyId;
+    }
+    form.setFieldsValue(formValues);
     setModalVisible(true);
   };
 
@@ -125,20 +133,48 @@ export default function VehiclesPage() {
     try {
       const values = await form.validateFields();
       const submitData: any = { ...values };
+      let companyName = '';
       if (!isCompanyAdmin && values.companyId) {
         const selectedCompany = companies.find((c) => c.id === values.companyId);
         if (selectedCompany) {
           submitData.company = selectedCompany.name;
           submitData.companyName = selectedCompany.name;
+          companyName = selectedCompany.name;
         }
+      } else if (isCompanyAdmin) {
+        companyName = user?.company || '';
+        submitData.companyName = companyName;
       }
       if (editingVehicle) {
         await vehicleApi.update(editingVehicle.id, submitData);
-        setVehicles(vehicles.map((v) => (v.id === editingVehicle.id ? { ...v, ...submitData } : v)));
+        const updatedVehicle: any = {
+          ...editingVehicle,
+          ...submitData,
+          company: companyName || submitData.company || editingVehicle.company,
+          companyName: companyName || submitData.companyName || editingVehicle.company,
+          companyId: isCompanyAdmin ? user?.companyId : (values.companyId || editingVehicle.companyId),
+          capacity: values.capacity,
+          loadCapacity: values.capacity,
+          remark: values.remark,
+          auditRemark: values.remark,
+        };
+        setVehicles(vehicles.map((v) => (v.id === editingVehicle.id ? updatedVehicle : v)));
         message.success('更新成功');
       } else {
         const res = await vehicleApi.create(submitData);
-        const newVehicle = { ...submitData, id: res.data?.id || Date.now().toString(), status: 'pending', createdAt: new Date().toISOString() };
+        const newVehicle: any = {
+          ...submitData,
+          id: res.data?.id || Date.now().toString(),
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          company: companyName || submitData.company,
+          companyName: companyName || submitData.companyName,
+          companyId: isCompanyAdmin ? user?.companyId : values.companyId,
+          capacity: values.capacity,
+          loadCapacity: values.capacity,
+          remark: values.remark,
+          auditRemark: values.remark,
+        };
         setVehicles([newVehicle, ...vehicles]);
         message.success('添加成功');
       }
@@ -160,11 +196,21 @@ export default function VehiclesPage() {
       const values = await reviewForm.validateFields();
       if (type === 'approve') {
         await vehicleApi.approve(reviewingVehicle!.id, values);
-        setVehicles(vehicles.map((v) => (v.id === reviewingVehicle!.id ? { ...v, status: 'approved' } : v)));
+        setVehicles(vehicles.map((v) => (v.id === reviewingVehicle!.id ? {
+          ...v,
+          status: 'approved',
+          remark: values.remark,
+          auditRemark: values.remark,
+        } : v)));
         message.success('审核通过');
       } else {
         await vehicleApi.reject(reviewingVehicle!.id, values);
-        setVehicles(vehicles.map((v) => (v.id === reviewingVehicle!.id ? { ...v, status: 'rejected', remark: values.remark } : v)));
+        setVehicles(vehicles.map((v) => (v.id === reviewingVehicle!.id ? {
+          ...v,
+          status: 'rejected',
+          remark: values.remark,
+          auditRemark: values.remark,
+        } : v)));
         message.success('已驳回');
       }
       setApproveModalVisible(false);

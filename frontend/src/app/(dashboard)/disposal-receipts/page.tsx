@@ -49,14 +49,6 @@ interface DisposalReceipt {
   createdAt: string;
 }
 
-const mockReceipts: DisposalReceipt[] = [
-  { id: '1', receiptNo: 'DR20240120001', plateNumber: '京A12345', driverName: '张三', wasteType: 'HW08废矿物油', weight: 8.5, disposalUnit: '危险废物处置中心', receiverName: '李经理', disposalTime: '2024-01-20 15:30:00', transportOrderId: 'order1', transportOrderNo: 'TO20240120001', status: 'matched', matchedAt: '2024-01-20 16:00:00', createdAt: '2024-01-20 15:35:00' },
-  { id: '2', receiptNo: 'DR20240120002', plateNumber: '京C11111', driverName: '王五', wasteType: 'HW49其他废物', weight: 5.2, disposalUnit: '危险废物处置中心', receiverName: '王主管', disposalTime: '2024-01-20 14:20:00', transportOrderId: 'order2', transportOrderNo: 'TO20240120002', status: 'matched', matchedAt: '2024-01-20 15:00:00', createdAt: '2024-01-20 14:25:00' },
-  { id: '3', receiptNo: 'DR20240121001', plateNumber: '京B67890', driverName: '李四', wasteType: 'HW06废有机溶剂', weight: 15.0, disposalUnit: '环保处置有限公司', receiverName: '赵主任', disposalTime: '2024-01-21 10:00:00', status: 'unmatched', createdAt: '2024-01-21 10:05:00' },
-  { id: '4', receiptNo: 'DR20240120003', plateNumber: '京D22222', driverName: '赵六', wasteType: 'HW17表面处理废物', weight: 10.0, disposalUnit: '危险废物处置中心', receiverName: '孙工', disposalTime: '2024-01-20 11:00:00', status: 'mismatched', matchRemark: '运输单重量12吨，联单重量10吨，重量不符', createdAt: '2024-01-20 11:05:00' },
-  { id: '5', receiptNo: 'DR20240121002', plateNumber: '京E33333', driverName: '钱七', wasteType: 'HW08废矿物油', weight: 12.0, disposalUnit: '环保处置有限公司', receiverName: '周经理', disposalTime: '2024-01-21 14:00:00', status: 'unmatched', createdAt: '2024-01-21 14:10:00' },
-];
-
 const statusMap = {
   unmatched: { color: 'orange', text: '待匹配' },
   matched: { color: 'green', text: '已匹配' },
@@ -64,7 +56,7 @@ const statusMap = {
 };
 
 export default function DisposalReceiptsPage() {
-  const [receipts, setReceipts] = useState<DisposalReceipt[]>(mockReceipts);
+  const [receipts, setReceipts] = useState<DisposalReceipt[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [matchVisible, setMatchVisible] = useState(false);
